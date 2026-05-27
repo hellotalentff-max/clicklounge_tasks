@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>CLS OS — Tasks Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --slate:#2f4f4f; --teal:#51897d; --gold:#d79068; --cream:#f5f0e8; --danger:#c0544a; --success:#3d8c6e;
+  --text:#1e3333; --muted:#6b8080; --light:#f4f7f6; --light2:#e8edec; --white:#fff; --border:#dce5e3;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--light);color:var(--text);min-height:100vh;}
+.badge{font-size:10px;padding:2px 8px;border-radius:8px;font-weight:500;}
+.b-gold{background:rgba(215,144,104,0.12);color:var(--gold);}
+.b-teal{background:rgba(81,137,125,0.12);color:var(--teal);}
+button{cursor:pointer;border:none;font-family:inherit;}
+.btn{padding:8px 16px;border-radius:8px;font-weight:500;font-size:13px;transition:all .15s;}
+.btn-teal{background:var(--teal);color:#fff;} .btn-teal:hover{background:#3d6b61;}
+.btn-gold{background:var(--gold);color:#fff;} .btn-gold:hover{background:#c07b52;}
+.btn-outline{background:none;border:1.5px solid var(--border);color:var(--text);} .btn-outline:hover{border-color:var(--teal);color:var(--teal);}
+.btn-danger{background:var(--danger);color:#fff;font-size:11px;padding:4px 10px;border-radius:6px;}
+.btn-sm{padding:5px 12px;font-size:11px;border-radius:6px;}
+.sinput{border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;font-family:inherit;font-size:13px;background:var(--white);width:100%;transition:border .15s;}
+.sinput:focus{outline:none;border-color:var(--teal);}
+select.sinput{appearance:auto;}
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(47,79,79,0.04);}
+.ct{font-size:13px;font-weight:600;color:var(--slate);margin-bottom:12px;}
+.tm{text-align:center;color:var(--muted);padding:20px;font-size:13px;}
+.field{margin-bottom:12px;} .field label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.fe{display:flex;gap:8px;justify-content:flex-end;}
+
+/* Header */
+.header{background:var(--slate);color:var(--cream);padding:16px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;}
+.header h1{font-size:18px;font-weight:700;flex:1;}
+.header .sub{font-size:11px;color:rgba(245,240,232,0.6);}
+
+/* Layout */
+.main{max-width:1200px;margin:0 auto;padding:20px;}
+
+/* View toggles */
+.view-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+
+/* Kanban */
+.kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;overflow-x:auto;padding-bottom:8px;}
+@media(max-width:900px){.kanban{grid-template-columns:repeat(5,minmax(200px,1fr));}}
+.kanban-col{background:var(--light);border-radius:10px;padding:10px;min-height:300px;}
+.kanban-col-hdr{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:6px 8px;margin-bottom:8px;border-radius:6px;display:flex;align-items:center;justify-content:space-between;}
+.task-card{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer;transition:all .15s;}
+.task-card:hover{border-color:var(--teal);box-shadow:0 2px 8px rgba(47,79,79,0.08);transform:translateY(-1px);}
+.tc-title{font-size:13px;font-weight:600;color:var(--slate);margin-bottom:4px;}
+.tc-client{font-size:11px;color:var(--muted);margin-bottom:6px;}
+.tc-meta{display:flex;gap:6px;flex-wrap:wrap;}
+.tc-badge{font-size:9px;padding:2px 6px;border-radius:6px;font-weight:500;}
+
+/* List view */
+.task-list-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--light2);background:var(--white);transition:background .1s;}
+.task-list-item:hover{background:var(--light);}
+.task-list-item:first-child{border-radius:10px 10px 0 0;}
+.task-list-item:last-child{border-radius:0 0 10px 10px;border-bottom:none;}
+
+/* Filters */
+.filter-btn{padding:5px 12px;font-size:11px;border-radius:16px;font-weight:500;background:var(--light);border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:all .15s;}
+.filter-btn:hover{border-color:var(--teal);color:var(--teal);}
+.filter-btn.active{background:var(--teal);color:#fff;border-color:var(--teal);}
+
+/* Modal */
+.modal-ov{position:fixed;inset:0;background:rgba(30,51,51,0.5);display:none;align-items:center;justify-content:center;z-index:200;padding:20px;}
+.modal-ov.open{display:flex;}
+.modal-box{background:var(--white);border-radius:14px;padding:24px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(30,51,51,0.2);}
+
+/* Notify */
+.notify{position:fixed;top:16px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:10px;font-size:13px;font-weight:500;z-index:300;animation:slideIn .3s ease;}
+@keyframes slideIn{from{opacity:0;transform:translateX(-50%) translateY(-20px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+
+/* Settings bar */
+.settings-bar{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>📋 Tasks Manager</h1>
+    <div class="sub">CLS OS — Studio Workflow</div>
+    <div class="sub" id="client-count" style="margin-top:2px;"></div>
+    <div class="sub" id="last-sync" style="margin-top:1px;font-size:10px;"></div>
+  </div>
+  <button class="btn btn-outline" style="color:var(--cream);border-color:rgba(245,240,232,0.3);" onclick="syncAll()">🔄 Sync</button>
+  <button class="btn btn-outline" style="color:var(--cream);border-color:rgba(245,240,232,0.3);" onclick="toggleSettings()">⚙ Settings</button>
+</div>
+
+<!-- Settings -->
+<div class="main">
+  <div id="settings-panel" style="display:none;" class="card">
+    <div class="ct">⚙ Connection Settings</div>
+    <div class="field">
+      <label>Apps Script URL</label>
+      <input type="url" id="task-url" class="sinput" placeholder="https://script.google.com/macros/s/.../exec">
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;">Same URL as your CLS OS Control Hub.</div>
+    </div>
+    <div class="fe">
+      <button class="btn btn-teal" onclick="saveSettings()">💾 Save & Sync</button>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="view-tabs">
+    <button class="btn btn-sm btn-teal" id="view-board-btn" onclick="setView('board')">⊞ Board</button>
+    <button class="btn btn-sm btn-outline" id="view-list-btn" onclick="setView('list')">☰ List</button>
+    <button class="btn btn-sm btn-outline" id="view-archive-btn" onclick="toggleArchived()">📦 Archived</button>
+    <div style="flex:1;"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;" id="filter-bar">
+      <button class="filter-btn active" data-f="all" onclick="setFilter('all')">All</button>
+      <button class="filter-btn" data-f="new" onclick="setFilter('new')">🆕 New</button>
+      <button class="filter-btn" data-f="inprogress" onclick="setFilter('inprogress')">⚙ In Progress</button>
+      <button class="filter-btn" data-f="review" onclick="setFilter('review')">👁 Review</button>
+      <button class="filter-btn" data-f="pickup" onclick="setFilter('pickup')">📦 Ready</button>
+      <button class="filter-btn" data-f="delivered" onclick="setFilter('delivered')">✓ Delivered</button>
+      <button class="filter-btn" data-f="overdue" onclick="setFilter('overdue')">⚠ Overdue</button>
+    </div>
+    <button class="btn btn-gold" onclick="openNewTask()">+ New Task</button>
+  </div>
+
+  <!-- Board view -->
+  <div id="board-view">
+    <div class="kanban" id="kanban-board"></div>
+  </div>
+
+  <!-- List view -->
+  <div id="list-view" style="display:none;">
+    <div id="task-list"></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-ov" id="modal-ov" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box" id="modal-cnt"></div>
+</div>
+
+<script>
+// ================================================================
+//  CONFIG
+// ================================================================
+var STAGES = [
+  {id:'new',        label:'New',         color:'var(--teal)',   bg:'rgba(81,137,125,0.08)'},
+  {id:'inprogress', label:'In Progress', color:'var(--gold)',   bg:'rgba(215,144,104,0.08)'},
+  {id:'review',     label:'For Review',  color:'#5b63d9',      bg:'rgba(91,99,217,0.08)'},
+  {id:'pickup',     label:'Ready',       color:'var(--success)',bg:'rgba(61,140,110,0.08)'},
+  {id:'delivered',  label:'Delivered',   color:'var(--muted)',  bg:'rgba(107,128,128,0.08)'}
+];
+
+var TASK_TYPES = {
+  editing:    {label:'Photo Editing',   icon:'🖼'},
+  printing:   {label:'Printing',        icon:'🖨'},
+  framing:    {label:'Framing',         icon:'🖼'},
+  album:      {label:'Album Layout',    icon:'📖'},
+  video:      {label:'Video Editing',   icon:'🎬'},
+  delivery:   {label:'Delivery/Pickup', icon:'📦'},
+  other:      {label:'Other',           icon:'📋'}
+};
+
+var TASKS = [];
+var CUR_VIEW = 'board';
+var CUR_FILTER = 'all';
+var SHOW_ARCHIVED = false;
+var CLIENTS = [];
+
+// ================================================================
+//  UTILS
+// ================================================================
+function uid(){ return Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
+function fmt(n){ return (+(n||0)).toLocaleString('en-PH'); }
+function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function todayStr(){ return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}); }
+function getUrl(){ return localStorage.getItem('cl_tasks_url') || localStorage.getItem('cl_url') || ''; }
+function hasUrl(){ return !!getUrl(); }
+
+function notify(msg, type){
+  var el = document.createElement('div');
+  el.className = 'notify';
+  el.textContent = msg;
+  el.style.background = type==='error'?'var(--danger)':type==='info'?'var(--slate)':'var(--success)';
+  el.style.color = '#fff';
+  document.body.appendChild(el);
+  setTimeout(function(){ el.remove(); }, 3000);
+}
+
+function openModal(html){ document.getElementById('modal-cnt').innerHTML=html; document.getElementById('modal-ov').classList.add('open'); }
+function closeModal(){ document.getElementById('modal-ov').classList.remove('open'); }
+
+// ================================================================
+//  JSONP gasCall (same as CLS OS)
+// ================================================================
+function gasCall(action, payload, retryCount){
+  if(!retryCount) retryCount = 0;
+  return new Promise(function(resolve, reject){
+    if(!hasUrl()){ reject(new Error('No URL configured')); return; }
+    var cbName = '_gcb_'+uid();
+    var timeout = setTimeout(function(){
+      delete window[cbName];
+      if(retryCount < 2){ resolve(gasCall(action, payload, retryCount+1)); }
+      else{ reject(new Error('Timeout')); }
+    }, 30000);
+    window[cbName] = function(data){
+      clearTimeout(timeout);
+      delete window[cbName];
+      resolve(data);
+    };
+    var url = getUrl() + '?action='+encodeURIComponent(action)+
+      '&payload='+encodeURIComponent(JSON.stringify(payload||{}))+
+      '&callback='+cbName;
+    var s = document.createElement('script');
+    s.src = url;
+    s.onerror = function(){
+      clearTimeout(timeout);
+      delete window[cbName];
+      reject(new Error('Network error'));
+    };
+    document.body.appendChild(s);
+    setTimeout(function(){ try{document.body.removeChild(s);}catch(e){} }, 5000);
+  });
+}
+
+// ================================================================
+//  DATA
+// ================================================================
+function loadTasks(){
+  try{
+    var s = localStorage.getItem('cl_tasks');
+    if(s) TASKS = JSON.parse(s);
+  }catch(e){ TASKS = []; }
+}
+
+function saveTasks(){
+  try{ localStorage.setItem('cl_tasks', JSON.stringify(TASKS)); }catch(e){}
+}
+
+function loadClients(){
+  try{
+    var s = localStorage.getItem('cl_tasks_clients');
+    if(s) CLIENTS = JSON.parse(s);
+  }catch(e){ CLIENTS = []; }
+
+  // Also try reading from CLS OS POS localStorage (same origin on GitHub Pages)
+  try{
+    var posDB = localStorage.getItem('cl_db');
+    if(posDB){
+      var parsed = JSON.parse(posDB);
+      var existingNames = {};
+      CLIENTS.forEach(function(c){ existingNames[(c.fbName||'').toLowerCase()] = true; });
+
+      // Merge clients from POS
+      if(Array.isArray(parsed.clients)){
+        parsed.clients.forEach(function(c){
+          var key = (c.fbName||'').toLowerCase();
+          if(key && !existingNames[key]){
+            CLIENTS.push(c);
+            existingNames[key] = true;
+          }
+        });
+      }
+
+      // Also extract unique names from transactions
+      if(Array.isArray(parsed.transactions)){
+        parsed.transactions.forEach(function(t){
+          var name = (t.clientName||'').trim();
+          var key = name.toLowerCase();
+          if(key && !existingNames[key]){
+            CLIENTS.push({fbName:name, email:'', type:'walkin', added:t.date||''});
+            existingNames[key] = true;
+          }
+        });
+      }
+
+      // Also extract from registrations
+      if(Array.isArray(parsed.registrations)){
+        parsed.registrations.forEach(function(r){
+          var key = (r.fbName||'').toLowerCase();
+          if(key && !existingNames[key]){
+            CLIENTS.push({fbName:r.fbName, email:r.email||'', type:r.arrType||'walkin', added:r.date||''});
+            existingNames[key] = true;
+          }
+        });
+      }
+
+      // Also extract from acknowledgements
+      if(Array.isArray(parsed.acknowledgements)){
+        parsed.acknowledgements.forEach(function(a){
+          var key = (a.fbName||'').toLowerCase();
+          if(key && !existingNames[key]){
+            CLIENTS.push({fbName:a.fbName, email:a.email||'', type:'booked', added:a.date||''});
+            existingNames[key] = true;
+          }
+        });
+      }
+
+      saveClients();
+    }
+  }catch(e){}
+}
+
+function saveClients(){
+  try{ localStorage.setItem('cl_tasks_clients', JSON.stringify(CLIENTS)); }catch(e){}
+}
+
+async function syncAll(){
+  if(!hasUrl()){ notify('Set Apps Script URL in Settings','error'); return; }
+  notify('Syncing…','info');
+  try{
+    var r = await gasCall('getAll');
+    if(r.ok){
+      if(Array.isArray(r.tasks)) { TASKS = r.tasks; saveTasks(); }
+
+      // Build complete client list from ALL sources
+      var clientMap = {};
+
+      // 1. Clients sheet (primary — has full details)
+      if(Array.isArray(r.clients)){
+        r.clients.forEach(function(c){
+          var key = (c.fbName||'').trim().toLowerCase();
+          if(key) clientMap[key] = c;
+        });
+      }
+
+      // 2. Registrations — add anyone who checked in but isn't in Clients sheet
+      if(Array.isArray(r.registrations)){
+        r.registrations.forEach(function(reg){
+          var key = (reg.fbName||'').trim().toLowerCase();
+          if(key && !clientMap[key]){
+            clientMap[key] = {
+              fbName: reg.fbName, email: reg.email||'',
+              type: reg.arrType||'walkin', added: reg.date||'',
+              socialConsent: reg.socialConsent||''
+            };
+          } else if(key && clientMap[key]){
+            // Fill in missing fields from registration
+            var c = clientMap[key];
+            if(reg.email && !c.email) c.email = reg.email;
+            if(reg.socialConsent && !c.socialConsent) c.socialConsent = reg.socialConsent;
+          }
+        });
+      }
+
+      // 3. Transactions — add anyone who has an invoice but isn't in Clients/Registrations
+      if(Array.isArray(r.transactions)){
+        r.transactions.forEach(function(t){
+          var name = (t.clientName||'').trim();
+          var key = name.toLowerCase();
+          if(key && !clientMap[key]){
+            clientMap[key] = {
+              fbName: name, email: '', type: 'walkin', added: t.date||''
+            };
+          }
+        });
+      }
+
+      // 4. Acknowledgements — booking receipts
+      if(Array.isArray(r.acknowledgements)){
+        r.acknowledgements.forEach(function(a){
+          var key = (a.fbName||'').trim().toLowerCase();
+          if(key && !clientMap[key]){
+            clientMap[key] = {
+              fbName: a.fbName, email: a.email||'', type: 'booked', added: a.date||''
+            };
+          } else if(key && clientMap[key]){
+            var c = clientMap[key];
+            if(a.email && !c.email) c.email = a.email;
+            if(c.type !== 'booked') c.type = 'booked';
+          }
+        });
+      }
+
+      CLIENTS = Object.keys(clientMap).map(function(k){ return clientMap[k]; });
+      saveClients();
+
+      notify('Synced ✓ — '+TASKS.length+' tasks, '+CLIENTS.length+' clients','success');
+      updateClientCount();
+      updateLastSync();
+      render();
+    } else {
+      notify('Sync failed: '+(r.error||'Unknown'),'error');
+    }
+  }catch(e){
+    notify('Sync error: '+e.message,'error');
+  }
+}
+
+async function pushTask(task, isNew){
+  saveTasks();
+  if(hasUrl()){
+    try{
+      if(isNew){
+        await gasCall('saveTask', task);
+      } else {
+        await gasCall('updateTask', task);
+      }
+    }catch(e){
+      console.log('Push failed, will sync later:', e.message);
+    }
+  }
+}
+
+// ================================================================
+//  VIEWS
+// ================================================================
+function setView(v){
+  CUR_VIEW = v;
+  document.getElementById('board-view').style.display = v==='board' ? '' : 'none';
+  document.getElementById('list-view').style.display  = v==='list'  ? '' : 'none';
+  document.getElementById('view-board-btn').className = v==='board' ? 'btn btn-sm btn-teal' : 'btn btn-sm btn-outline';
+  document.getElementById('view-list-btn').className  = v==='list'  ? 'btn btn-sm btn-teal' : 'btn btn-sm btn-outline';
+  render();
+}
+
+function setFilter(f){
+  CUR_FILTER = f;
+  document.querySelectorAll('.filter-btn').forEach(function(btn){
+    btn.classList.toggle('active', btn.dataset.f === f);
+  });
+  render();
+}
+
+function toggleArchived(){
+  SHOW_ARCHIVED = !SHOW_ARCHIVED;
+  var btn = document.getElementById('view-archive-btn');
+  if(btn){
+    btn.textContent = SHOW_ARCHIVED ? '📋 Active Tasks' : '📦 Archived';
+    btn.className = SHOW_ARCHIVED ? 'btn btn-sm btn-teal' : 'btn btn-sm btn-outline';
+  }
+  render();
+}
+
+function toggleSettings(){
+  var el = document.getElementById('settings-panel');
+  el.style.display = el.style.display==='none' ? '' : 'none';
+}
+
+function saveSettings(){
+  var url = (document.getElementById('task-url').value||'').trim();
+  if(!url){ notify('Enter the Apps Script URL','error'); return; }
+  localStorage.setItem('cl_tasks_url', url);
+  notify('URL saved ✓','success');
+  document.getElementById('settings-panel').style.display = 'none';
+  syncAll();
+}
+
+// ================================================================
+//  RENDER
+// ================================================================
+function render(){
+  if(CUR_VIEW === 'board') renderKanban();
+  else renderList();
+}
+
+function getFilteredTasks(){
+  var tasks = TASKS.filter(function(t){
+    if(SHOW_ARCHIVED) return t.archived;
+    return !t.archived;
+  });
+  if(CUR_FILTER !== 'all'){
+    if(CUR_FILTER === 'overdue'){
+      var today = todayStr();
+      tasks = tasks.filter(function(t){ return t.dueDate && t.dueDate < today && t.stage !== 'delivered'; });
+    } else {
+      tasks = tasks.filter(function(t){ return t.stage === CUR_FILTER; });
+    }
+  }
+  return tasks;
+}
+
+function renderKanban(){
+  var el = document.getElementById('kanban-board');
+  var tasks = getFilteredTasks();
+  var today = todayStr();
+
+  var html = '';
+  STAGES.forEach(function(stage){
+    var stageTasks = tasks.filter(function(t){ return t.stage === stage.id; });
+    html += '<div class="kanban-col">';
+    html += '<div class="kanban-col-hdr" style="background:'+stage.bg+';color:'+stage.color+';">'+
+      '<span>'+stage.label+'</span>'+
+      '<span style="font-size:10px;opacity:0.7;">'+stageTasks.length+'</span>'+
+    '</div>';
+    stageTasks.forEach(function(t){
+      var type = TASK_TYPES[t.type]||TASK_TYPES.other;
+      var isOverdue = t.dueDate && t.dueDate < today && t.stage !== 'delivered';
+      html += '<div class="task-card" data-tid="'+t.id+'" onclick="openTaskDetail(this.dataset.tid)">'+
+        '<div class="tc-title">'+escHtml(t.title||'Untitled')+'</div>'+
+        '<div class="tc-client">'+type.icon+' '+escHtml(t.client||'No client')+'</div>'+
+        '<div class="tc-meta">'+
+          '<span class="tc-badge" style="background:'+stage.bg+';color:'+stage.color+';">'+stage.label+'</span>'+
+          (t.dueDate ? '<span class="tc-badge" style="background:'+(isOverdue?'rgba(192,84,74,0.1)':'var(--light)')+';color:'+(isOverdue?'var(--danger)':'var(--muted)')+';">📅 '+t.dueDate+'</span>' : '')+
+          (t.priority==='high' ? '<span class="tc-badge" style="background:rgba(192,84,74,0.1);color:var(--danger);">🔴 High</span>' : '')+
+        '</div>'+
+      '</div>';
+    });
+    if(!stageTasks.length){
+      html += '<div class="tm" style="font-size:11px;">No tasks</div>';
+    }
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function renderList(){
+  var el = document.getElementById('task-list');
+  var tasks = getFilteredTasks();
+  var today = todayStr();
+
+  if(!tasks.length){ el.innerHTML='<div class="tm">No tasks found.</div>'; return; }
+
+  var html = '';
+  tasks.sort(function(a,b){
+    var sa = STAGES.findIndex(function(s){return s.id===a.stage;});
+    var sb = STAGES.findIndex(function(s){return s.id===b.stage;});
+    return sa - sb || String(a.dueDate||'').localeCompare(String(b.dueDate||''));
+  });
+
+  tasks.forEach(function(t){
+    var stage = STAGES.find(function(s){return s.id===t.stage;})||STAGES[0];
+    var type = TASK_TYPES[t.type]||TASK_TYPES.other;
+    var isOverdue = t.dueDate && t.dueDate < today && t.stage !== 'delivered';
+
+    html += '<div class="task-list-item" data-tid="'+t.id+'" onclick="openTaskDetail(this.dataset.tid)">'+
+      '<div style="width:10px;height:10px;border-radius:50%;background:'+stage.color+';flex-shrink:0;"></div>'+
+      '<div style="flex:1;min-width:0;">'+
+        '<div style="font-weight:600;font-size:13px;color:var(--slate);">'+escHtml(t.title||'Untitled')+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);">'+type.icon+' '+escHtml(t.client||'—')+
+          (t.dueDate ? ' · 📅 '+t.dueDate : '')+
+          (t.notes ? ' · '+escHtml(String(t.notes).slice(0,40)) : '')+
+        '</div>'+
+      '</div>'+
+      '<span class="tc-badge" style="background:'+stage.bg+';color:'+stage.color+';flex-shrink:0;">'+stage.label+'</span>'+
+      (isOverdue ? '<span class="tc-badge" style="background:rgba(192,84,74,0.1);color:var(--danger);flex-shrink:0;">Overdue</span>' : '')+
+    '</div>';
+  });
+  el.innerHTML = '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">'+html+'</div>';
+}
+
+// ================================================================
+//  TASK DETAIL / NEW
+// ================================================================
+function openNewTask(){ openTaskDetail(null); }
+
+function openTaskDetail(id){
+  var t = id ? TASKS.find(function(x){return x.id===id;}) : null;
+  var isNew = !t;
+
+  var sortedClients = CLIENTS.slice().sort(function(a,b){ return (a.fbName||'').localeCompare(b.fbName||''); });
+  var clientOpts = '<option value="">— Select client ('+sortedClients.length+' available) —</option>';
+  sortedClients.forEach(function(c){
+    var sel = (t && t.client === c.fbName) ? ' selected' : '';
+    var label = escHtml(c.fbName||'');
+    if(c.email) label += ' — '+escHtml(c.email);
+    clientOpts += '<option value="'+escHtml(c.fbName)+'"'+sel+'>'+label+'</option>';
+  });
+
+  var typeOpts = '';
+  Object.keys(TASK_TYPES).forEach(function(k){
+    var sel = (t && t.type === k) ? ' selected' : '';
+    typeOpts += '<option value="'+k+'"'+sel+'>'+TASK_TYPES[k].icon+' '+TASK_TYPES[k].label+'</option>';
+  });
+
+  var stageOpts = '';
+  STAGES.forEach(function(s){
+    var sel = (t && t.stage === s.id) ? ' selected' : '';
+    stageOpts += '<option value="'+s.id+'"'+sel+'>'+s.label+'</option>';
+  });
+
+  var html =
+    '<h3 style="margin-bottom:16px;">'+(isNew?'+ New Task':'✏ Edit Task')+'</h3>'+
+    '<div class="field"><label>Title *</label>'+
+      '<input type="text" id="td-title" class="sinput" value="'+escHtml(t?t.title:'')+'" placeholder="e.g. Edit photos for Juan"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+      '<div class="field"><label>Client</label>'+
+        '<select id="td-client" class="sinput" onchange="showTaskClientInfo()">'+clientOpts+'</select></div>'+
+      '<div class="field"><label>Type</label>'+
+        '<select id="td-type" class="sinput">'+typeOpts+'</select></div>'+
+    '</div>'+
+    '<div id="td-client-info" style="display:none;background:var(--light);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+      '<div class="field"><label>Stage</label>'+
+        '<select id="td-stage" class="sinput">'+stageOpts+'</select></div>'+
+      '<div class="field"><label>Due Date</label>'+
+        '<input type="date" id="td-due" class="sinput" value="'+(t?t.dueDate||'':'')+'"></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+      '<div class="field"><label>Priority</label>'+
+        '<select id="td-priority" class="sinput">'+
+          '<option value="normal"'+((t&&t.priority==='normal')||!t?' selected':'')+'>Normal</option>'+
+          '<option value="high"'+(t&&t.priority==='high'?' selected':'')+'>🔴 High</option>'+
+          '<option value="low"'+(t&&t.priority==='low'?' selected':'')+'>Low</option>'+
+        '</select></div>'+
+      '<div class="field"><label>Assigned To</label>'+
+        '<input type="text" id="td-assigned" class="sinput" value="'+escHtml(t?t.assignedTo||'':'')+'" placeholder="Staff name"></div>'+
+    '</div>'+
+    '<div class="field"><label>Google Drive Link</label>'+
+      '<input type="url" id="td-drive" class="sinput" value="'+escHtml(t?t.driveLink||'':'')+'" placeholder="https://drive.google.com/..."></div>'+
+    '<div class="field"><label>Notes</label>'+
+      '<textarea id="td-notes" class="sinput" rows="3" style="resize:vertical;">'+escHtml(t?t.notes||'':'')+'</textarea></div>'+
+    '<div class="fe" style="justify-content:space-between;">'+
+      (t ? '<div style="display:flex;gap:6px;">'+
+        '<button class="btn btn-sm btn-outline" id="td-archive-btn">📦 '+(t.archived?'Unarchive':'Archive')+'</button>'+
+        '<button class="btn btn-danger" id="td-delete-btn">🗑 Delete</button>'+
+      '</div>' : '<div></div>')+
+      '<div style="display:flex;gap:8px;">'+
+        '<button class="btn btn-outline" id="td-cancel-btn">Cancel</button>'+
+        '<button class="btn btn-teal" id="td-save-btn">💾 '+(isNew?'Create Task':'Save Changes')+'</button>'+
+      '</div>'+
+    '</div>';
+
+  openModal(html);
+
+  // Wire buttons
+  setTimeout(function(){
+    document.getElementById('td-cancel-btn').addEventListener('click', closeModal);
+    document.getElementById('td-save-btn').addEventListener('click', function(){ saveTask(t?t.id:null); });
+    if(t){
+      document.getElementById('td-archive-btn').addEventListener('click', function(){ archiveTask(t.id); });
+      document.getElementById('td-delete-btn').addEventListener('click', function(){ deleteTask(t.id); });
+    }
+    // Show client info if editing existing task
+    showTaskClientInfo();
+  }, 50);
+}
+
+function saveTask(existingId){
+  var title    = (document.getElementById('td-title').value||'').trim();
+  var client   = document.getElementById('td-client').value||'';
+  var type     = document.getElementById('td-type').value||'other';
+  var stage    = document.getElementById('td-stage').value||'new';
+  var dueDate  = document.getElementById('td-due').value||'';
+  var priority = document.getElementById('td-priority').value||'normal';
+  var assigned = (document.getElementById('td-assigned').value||'').trim();
+  var driveLink= (document.getElementById('td-drive').value||'').trim();
+  var notes    = (document.getElementById('td-notes').value||'').trim();
+
+  if(!title){ notify('Title is required','error'); return; }
+
+  if(existingId){
+    var t = TASKS.find(function(x){return x.id===existingId;});
+    if(t){
+      t.title = title; t.client = client; t.type = type; t.stage = stage;
+      t.dueDate = dueDate; t.priority = priority; t.assignedTo = assigned;
+      t.driveLink = driveLink; t.notes = notes; t.updatedAt = todayStr();
+      pushTask(t, false);
+      notify('Task updated ✓','success');
+    }
+  } else {
+    var task = {
+      id: uid(), title: title, client: client, type: type, stage: stage,
+      dueDate: dueDate, priority: priority, assignedTo: assigned,
+      driveLink: driveLink, notes: notes,
+      createdAt: todayStr(), updatedAt: todayStr(), archived: false
+    };
+    TASKS.push(task);
+    pushTask(task, true);
+    notify('Task created ✓','success');
+  }
+  closeModal();
+  render();
+}
+
+function archiveTask(id){
+  var t = TASKS.find(function(x){return x.id===id;});
+  if(!t) return;
+  t.archived = !t.archived;
+  t.updatedAt = todayStr();
+  pushTask(t, false);
+  closeModal();
+  render();
+  notify(t.archived?'Task archived':'Task restored','success');
+}
+
+function deleteTask(id){
+  if(!confirm('Delete this task permanently?')) return;
+  TASKS = TASKS.filter(function(x){return x.id!==id;});
+  saveTasks();
+  if(hasUrl()) gasCall('deleteRow',{sheet:'Tasks',id:id}).catch(function(){});
+  closeModal();
+  render();
+  notify('Task deleted','info');
+}
+
+function moveTaskStage(id, newStage){
+  var t = TASKS.find(function(x){return x.id===id;});
+  if(!t) return;
+  t.stage = newStage;
+  t.updatedAt = todayStr();
+  pushTask(t, false);
+  render();
+}
+
+function showTaskClientInfo(){
+  var name = document.getElementById('td-client')?.value||'';
+  var infoEl = document.getElementById('td-client-info');
+  if(!infoEl) return;
+  if(!name){ infoEl.style.display='none'; return; }
+  var c = CLIENTS.find(function(x){ return x.fbName===name; });
+  if(!c){ infoEl.style.display='none'; return; }
+  infoEl.style.display='';
+  infoEl.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;">'+
+      '<div style="width:36px;height:36px;border-radius:50%;background:var(--slate);color:var(--cream);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;">'+
+        name.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase()+
+      '</div>'+
+      '<div style="flex:1;">'+
+        '<div style="font-weight:600;color:var(--slate);">'+escHtml(name)+'</div>'+
+        '<div style="color:var(--muted);font-size:11px;">'+
+          (c.email ? '✉ '+escHtml(c.email) : 'No email')+
+          (c.phone ? ' · 📱 '+escHtml(c.phone) : '')+
+          (c.type ? ' · '+c.type : '')+
+        '</div>'+
+      '</div>'+
+    '</div>';
+}
+
+function updateClientCount(){
+  var el = document.getElementById('client-count');
+  if(el) el.textContent = CLIENTS.length+' clients synced';
+}
+
+function updateLastSync(){
+  var el = document.getElementById('last-sync');
+  if(el){
+    var now = new Date().toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'});
+    el.textContent = 'Last synced: '+now;
+  }
+}
+
+// ================================================================
+//  INIT
+// ================================================================
+loadTasks();
+loadClients();
+updateClientCount();
+
+var urlEl = document.getElementById('task-url');
+if(urlEl) urlEl.value = getUrl();
+
+if(!hasUrl()){
+  document.getElementById('settings-panel').style.display = '';
+}
+
+render();
+
+// Sync on load
+if(hasUrl()) syncAll();
+
+// Auto-sync every 30 seconds so all staff see updates
+var _syncInterval = null;
+function startAutoSync(){
+  if(_syncInterval) clearInterval(_syncInterval);
+  _syncInterval = setInterval(function(){
+    if(hasUrl() && document.visibilityState === 'visible'){
+      silentSync();
+    }
+  }, 30000);
+}
+
+// Silent sync — no notifications, just refresh data
+async function silentSync(){
+  if(!hasUrl()) return;
+  try{
+    var r = await gasCall('getAll');
+    if(r.ok){
+      var changed = false;
+      if(Array.isArray(r.tasks)){
+        var newJson = JSON.stringify(r.tasks.map(function(t){return t.id+t.stage+t.updatedAt;}).sort());
+        var oldJson = JSON.stringify(TASKS.map(function(t){return t.id+t.stage+t.updatedAt;}).sort());
+        if(newJson !== oldJson){
+          TASKS = r.tasks;
+          saveTasks();
+          changed = true;
+        }
+      }
+      if(Array.isArray(r.clients) || Array.isArray(r.registrations) || Array.isArray(r.transactions) || Array.isArray(r.acknowledgements)){
+        var clientMap = {};
+        if(Array.isArray(r.clients)) r.clients.forEach(function(c){ var k=(c.fbName||'').trim().toLowerCase(); if(k) clientMap[k]=c; });
+        if(Array.isArray(r.registrations)) r.registrations.forEach(function(reg){ var k=(reg.fbName||'').trim().toLowerCase(); if(k&&!clientMap[k]) clientMap[k]={fbName:reg.fbName,email:reg.email||'',type:reg.arrType||'walkin'}; });
+        if(Array.isArray(r.transactions)) r.transactions.forEach(function(t){ var k=(t.clientName||'').trim().toLowerCase(); if(k&&!clientMap[k]) clientMap[k]={fbName:t.clientName,email:'',type:'walkin'}; });
+        if(Array.isArray(r.acknowledgements)) r.acknowledgements.forEach(function(a){ var k=(a.fbName||'').trim().toLowerCase(); if(k&&!clientMap[k]) clientMap[k]={fbName:a.fbName,email:a.email||'',type:'booked'}; });
+        CLIENTS = Object.keys(clientMap).map(function(k){ return clientMap[k]; });
+        saveClients();
+        updateClientCount();
+      }
+      if(changed) render();
+      updateLastSync();
+    }
+  }catch(e){}
+}
+
+startAutoSync();
+
+// Also sync when tab becomes visible (user switches back)
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible' && hasUrl()){
+    silentSync();
+  }
+});
+</script>
+</body>
+</html>
