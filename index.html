@@ -202,15 +202,16 @@ function gasCall(action, payload, retryCount){
       delete window[cbName];
       if(retryCount < 2){ resolve(gasCall(action, payload, retryCount+1)); }
       else{ reject(new Error('Timeout')); }
-    }, 30000);
+    }, 45000);
     window[cbName] = function(data){
       clearTimeout(timeout);
       delete window[cbName];
       resolve(data);
     };
-    var url = getUrl() + '?action='+encodeURIComponent(action)+
-      '&payload='+encodeURIComponent(JSON.stringify(payload||{}))+
-      '&callback='+cbName;
+    // Encode as base64 JSON in 'd' param (matches Code.gs doGet)
+    var dataObj = JSON.stringify({action: action, payload: payload||{}});
+    var encoded = btoa(unescape(encodeURIComponent(dataObj)));
+    var url = getUrl() + '?d='+encodeURIComponent(encoded)+'&callback='+cbName;
     var s = document.createElement('script');
     s.src = url;
     s.onerror = function(){
@@ -324,50 +325,35 @@ async function syncAll(){
         });
       }
 
-      // 2. Registrations — add anyone who checked in but isn't in Clients sheet
+      // 2. Registrations
       if(Array.isArray(r.registrations)){
         r.registrations.forEach(function(reg){
           var key = (reg.fbName||'').trim().toLowerCase();
           if(key && !clientMap[key]){
-            clientMap[key] = {
-              fbName: reg.fbName, email: reg.email||'',
-              type: reg.arrType||'walkin', added: reg.date||'',
-              socialConsent: reg.socialConsent||''
-            };
-          } else if(key && clientMap[key]){
-            // Fill in missing fields from registration
-            var c = clientMap[key];
-            if(reg.email && !c.email) c.email = reg.email;
-            if(reg.socialConsent && !c.socialConsent) c.socialConsent = reg.socialConsent;
+            clientMap[key] = { fbName: reg.fbName, email: reg.email||'', type: reg.arrType||'walkin', added: reg.date||'' };
+          } else if(key && clientMap[key] && reg.email && !clientMap[key].email){
+            clientMap[key].email = reg.email;
           }
         });
       }
 
-      // 3. Transactions — add anyone who has an invoice but isn't in Clients/Registrations
+      // 3. Transactions
       if(Array.isArray(r.transactions)){
         r.transactions.forEach(function(t){
           var name = (t.clientName||'').trim();
           var key = name.toLowerCase();
           if(key && !clientMap[key]){
-            clientMap[key] = {
-              fbName: name, email: '', type: 'walkin', added: t.date||''
-            };
+            clientMap[key] = { fbName: name, email: '', type: 'walkin', added: t.date||'' };
           }
         });
       }
 
-      // 4. Acknowledgements — booking receipts
+      // 4. Acknowledgements
       if(Array.isArray(r.acknowledgements)){
         r.acknowledgements.forEach(function(a){
           var key = (a.fbName||'').trim().toLowerCase();
           if(key && !clientMap[key]){
-            clientMap[key] = {
-              fbName: a.fbName, email: a.email||'', type: 'booked', added: a.date||''
-            };
-          } else if(key && clientMap[key]){
-            var c = clientMap[key];
-            if(a.email && !c.email) c.email = a.email;
-            if(c.type !== 'booked') c.type = 'booked';
+            clientMap[key] = { fbName: a.fbName, email: a.email||'', type: 'booked', added: a.date||'' };
           }
         });
       }
@@ -383,7 +369,17 @@ async function syncAll(){
       notify('Sync failed: '+(r.error||'Unknown'),'error');
     }
   }catch(e){
-    notify('Sync error: '+e.message,'error');
+    notify('Sync error: '+e.message+' — trying clients only…','error');
+    // Fallback: try fetching just clients
+    try{
+      var r2 = await gasCall('getClients');
+      if(r2.ok && Array.isArray(r2.data)){
+        CLIENTS = r2.data;
+        saveClients();
+        updateClientCount();
+        notify('Loaded '+CLIENTS.length+' clients ✓','success');
+      }
+    }catch(e2){}
   }
 }
 
