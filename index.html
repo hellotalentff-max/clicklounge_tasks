@@ -489,6 +489,7 @@ function renderKanban(){
           '<span class="tc-badge" style="background:'+stage.bg+';color:'+stage.color+';">'+stage.label+'</span>'+
           (t.dueDate ? '<span class="tc-badge" style="background:'+(isOverdue?'rgba(192,84,74,0.1)':'var(--light)')+';color:'+(isOverdue?'var(--danger)':'var(--muted)')+';">📅 '+t.dueDate+'</span>' : '')+
           (t.priority==='high' ? '<span class="tc-badge" style="background:rgba(192,84,74,0.1);color:var(--danger);">🔴 High</span>' : '')+
+          (t.driveLink ? '<span class="tc-badge" style="background:rgba(81,137,125,0.1);color:var(--teal);">📂 Drive</span>' : '')+
         '</div>'+
       '</div>';
     });
@@ -593,17 +594,40 @@ function openTaskDetail(id){
         '<input type="text" id="td-assigned" class="sinput" value="'+escHtml(t?t.assignedTo||'':'')+'" placeholder="Staff name"></div>'+
     '</div>'+
     '<div class="field"><label>Google Drive Link</label>'+
-      '<input type="url" id="td-drive" class="sinput" value="'+escHtml(t?t.driveLink||'':'')+'" placeholder="https://drive.google.com/..."></div>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<input type="url" id="td-drive" class="sinput" value="'+escHtml(t?t.driveLink||'':'')+'" placeholder="https://drive.google.com/..." style="flex:1;">'+
+        (t && t.driveLink ? '<a href="'+escHtml(t.driveLink)+'" target="_blank" class="btn btn-sm btn-teal" style="white-space:nowrap;text-decoration:none;padding:8px 12px;">\ud83d\udcc2 Open</a>' : '')+
+      '</div></div>'+
+    (function(){
+      if(!t || !t.driveLink || !t.client) return '';
+      var cl = CLIENTS.find(function(c){ return c.fbName===t.client; });
+      var cEmail = (cl&&cl.email)||'';
+      var sentD = t.driveLinkSentDate||'';
+      var r1 = t.reminder1Sent||'';
+      var r2 = t.reminder2Sent||'';
+      return '<div style="background:var(--light);border-radius:8px;padding:12px 14px;margin-bottom:12px;">'+
+        '<div style="font-size:11px;font-weight:600;color:var(--slate);margin-bottom:8px;">\ud83d\udce7 Send Drive Link to Client</div>'+
+        (cEmail?'<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Send to: <strong>'+escHtml(cEmail)+'</strong></div>':'<div style="font-size:11px;color:var(--danger);margin-bottom:8px;">\u26a0 No email on file for this client</div>')+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+          '<button class="btn btn-sm btn-gold" id="td-send-link"'+(cEmail?'':' disabled')+' style="padding:8px 14px;">\ud83d\udce4 Send Link + Set Reminders</button>'+
+        '</div>'+
+        (sentD?'<div style="margin-top:8px;font-size:10px;color:var(--muted);line-height:1.8;">'+
+          '\u2705 Link sent: '+sentD+'<br>'+
+          (r1?'\ud83d\udce9 Day 12 reminder sent: '+r1:'\u23f3 Day 12 reminder scheduled')+'<br>'+
+          (r2?'\ud83d\udce9 Day 14 final reminder sent: '+r2:'\u23f3 Day 14 final reminder scheduled')+
+        '</div>':'')+
+      '</div>';
+    })()+
     '<div class="field"><label>Notes</label>'+
       '<textarea id="td-notes" class="sinput" rows="3" style="resize:vertical;">'+escHtml(t?t.notes||'':'')+'</textarea></div>'+
     '<div class="fe" style="justify-content:space-between;">'+
       (t ? '<div style="display:flex;gap:6px;">'+
-        '<button class="btn btn-sm btn-outline" id="td-archive-btn">📦 '+(t.archived?'Unarchive':'Archive')+'</button>'+
-        '<button class="btn btn-danger" id="td-delete-btn">🗑 Delete</button>'+
+        '<button class="btn btn-sm btn-outline" id="td-archive-btn">\ud83d\udce6 '+(t.archived?'Unarchive':'Archive')+'</button>'+
+        '<button class="btn btn-danger" id="td-delete-btn">\ud83d\uddd1 Delete</button>'+
       '</div>' : '<div></div>')+
       '<div style="display:flex;gap:8px;">'+
         '<button class="btn btn-outline" id="td-cancel-btn">Cancel</button>'+
-        '<button class="btn btn-teal" id="td-save-btn">💾 '+(isNew?'Create Task':'Save Changes')+'</button>'+
+        '<button class="btn btn-teal" id="td-save-btn">\ud83d\udcbe '+(isNew?'Create Task':'Save Changes')+'</button>'+
       '</div>'+
     '</div>';
 
@@ -619,7 +643,43 @@ function openTaskDetail(id){
     }
     // Show client info if editing existing task
     showTaskClientInfo();
+    // Wire send link button
+    var sendBtn = document.getElementById('td-send-link');
+    if(sendBtn) sendBtn.addEventListener('click', function(){ sendDriveLink(t.id); });
   }, 50);
+}
+
+async function sendDriveLink(taskId){
+  var t = TASKS.find(function(x){ return x.id===taskId; });
+  if(!t || !t.driveLink || !t.client){ notify('Missing drive link or client','error'); return; }
+  var cl = CLIENTS.find(function(c){ return c.fbName===t.client; });
+  if(!cl || !cl.email){ notify('No email on file for '+t.client,'error'); return; }
+
+  var btn = document.getElementById('td-send-link');
+  if(btn){ btn.disabled=true; btn.textContent='Sending...'; }
+
+  try{
+    var result = await gasCall('sendDriveLink', {
+      email: cl.email,
+      clientName: t.client,
+      driveLink: t.driveLink,
+      taskTitle: t.title||'Your photos',
+      taskId: t.id
+    });
+    if(result.ok){
+      t.driveLinkSentDate = todayStr();
+      pushTask(t, false);
+      notify('Drive link sent to '+cl.email+' with save reminders!','success');
+      closeModal();
+      openTaskDetail(taskId);
+    } else {
+      notify('Send failed: '+(result.error||'Unknown'),'error');
+      if(btn){ btn.disabled=false; btn.textContent='\ud83d\udce4 Send Link + Set Reminders'; }
+    }
+  }catch(e){
+    notify('Error: '+e.message,'error');
+    if(btn){ btn.disabled=false; btn.textContent='\ud83d\udce4 Send Link + Set Reminders'; }
+  }
 }
 
 function saveTask(existingId){
