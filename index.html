@@ -162,6 +162,7 @@ var TASK_TYPES = {
 };
 
 var TASKS = [];
+var _lastSaveTime = 0;
 var CUR_VIEW = 'board';
 var CUR_FILTER = 'all';
 var SHOW_ARCHIVED = false;
@@ -312,7 +313,7 @@ async function syncAll(){
   try{
     var r = await gasCall('getAll');
     if(r.ok){
-      if(Array.isArray(r.tasks)) { TASKS = r.tasks; saveTasks(); }
+      if(Array.isArray(r.tasks)) { TASKS = r.tasks.map(function(t){ if(t.due&&!t.dueDate)t.dueDate=t.due; return t; }); saveTasks(); }
 
       // Build complete client list from ALL sources
       var clientMap = {};
@@ -384,6 +385,7 @@ async function syncAll(){
 }
 
 async function pushTask(task, isNew){
+  _lastSaveTime = Date.now();
   saveTasks();
   if(hasUrl()){
     try{
@@ -715,7 +717,7 @@ function saveTask(existingId){
     var t = TASKS.find(function(x){return x.id===existingId;});
     if(t){
       t.title = title; t.client = client; t.type = type; t.stage = stage;
-      t.dueDate = dueDate; t.priority = priority; t.assignedTo = assigned;
+      t.dueDate = dueDate; t.due = dueDate; t.priority = priority; t.assignedTo = assigned;
       t.driveLink = driveLink; t.notes = notes; t.updatedAt = todayStr();
       pushTask(t, false);
       notify('Task updated ✓','success');
@@ -725,7 +727,7 @@ function saveTask(existingId){
       id: uid(), title: title, client: client, type: type, stage: stage,
       dueDate: dueDate, priority: priority, assignedTo: assigned,
       driveLink: driveLink, notes: notes,
-      createdAt: todayStr(), updatedAt: todayStr(), archived: false
+      createdAt: todayStr(), updatedAt: todayStr(), archived: false, due: dueDate
     };
     TASKS.push(task);
     pushTask(task, true);
@@ -738,7 +740,7 @@ function saveTask(existingId){
 function archiveTask(id){
   var t = TASKS.find(function(x){return x.id===id;});
   if(!t) return;
-  t.archived = !t.archived;
+  t.archived = t.archived ? false : true;
   t.updatedAt = todayStr();
   pushTask(t, false);
   closeModal();
@@ -835,6 +837,7 @@ function startAutoSync(){
 // Silent sync — no notifications, just refresh data
 async function silentSync(){
   if(!hasUrl()) return;
+  if(Date.now() - _lastSaveTime < 15000) return; // skip if saved recently
   try{
     var r = await gasCall('getAll');
     if(r.ok){
@@ -843,7 +846,7 @@ async function silentSync(){
         var newJson = JSON.stringify(r.tasks.map(function(t){return t.id+t.stage+t.updatedAt;}).sort());
         var oldJson = JSON.stringify(TASKS.map(function(t){return t.id+t.stage+t.updatedAt;}).sort());
         if(newJson !== oldJson){
-          TASKS = r.tasks;
+          TASKS = r.tasks.map(function(t){ if(t.due && !t.dueDate) t.dueDate=t.due; return t; });
           saveTasks();
           changed = true;
         }
