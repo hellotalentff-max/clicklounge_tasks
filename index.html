@@ -313,7 +313,7 @@ async function syncAll(){
   try{
     var r = await gasCall('getAll');
     if(r.ok){
-      if(Array.isArray(r.tasks)) { TASKS = r.tasks.map(function(t){ if(t.due&&!t.dueDate)t.dueDate=t.due; return t; }); saveTasks(); }
+      if(Array.isArray(r.tasks)) { var _del=JSON.parse(localStorage.getItem('cl_tasks_deleted')||'[]'); TASKS = r.tasks.map(function(t){ if(t.due&&!t.dueDate)t.dueDate=t.due; return t; }).filter(function(t){return _del.indexOf(t.id)===-1;}); saveTasks(); }
 
       // Build complete client list from ALL sources
       var clientMap = {};
@@ -750,7 +750,14 @@ function archiveTask(id){
 
 function deleteTask(id){
   if(!confirm('Delete this task permanently?')) return;
+  _lastSaveTime = Date.now();
   TASKS = TASKS.filter(function(x){return x.id!==id;});
+  // Track deleted IDs so silentSync can't restore them
+  var deleted = JSON.parse(localStorage.getItem('cl_tasks_deleted')||'[]');
+  if(deleted.indexOf(id) === -1) deleted.push(id);
+  // Keep only last 200 deleted IDs
+  if(deleted.length > 200) deleted = deleted.slice(-200);
+  localStorage.setItem('cl_tasks_deleted', JSON.stringify(deleted));
   saveTasks();
   if(hasUrl()) gasCall('deleteRow',{sheet:'Tasks',id:id}).catch(function(){});
   closeModal();
@@ -838,6 +845,7 @@ function startAutoSync(){
 async function silentSync(){
   if(!hasUrl()) return;
   if(Date.now() - _lastSaveTime < 15000) return; // skip if saved recently
+  var deletedIds = JSON.parse(localStorage.getItem('cl_tasks_deleted')||'[]');
   try{
     var r = await gasCall('getAll');
     if(r.ok){
@@ -846,7 +854,7 @@ async function silentSync(){
         var newJson = JSON.stringify(r.tasks.map(function(t){return t.id+t.stage+t.updatedAt;}).sort());
         var oldJson = JSON.stringify(TASKS.map(function(t){return t.id+t.stage+t.updatedAt;}).sort());
         if(newJson !== oldJson){
-          TASKS = r.tasks.map(function(t){ if(t.due && !t.dueDate) t.dueDate=t.due; return t; });
+          TASKS = r.tasks.map(function(t){ if(t.due && !t.dueDate) t.dueDate=t.due; return t; }).filter(function(t){return deletedIds.indexOf(t.id)===-1;});
           saveTasks();
           changed = true;
         }
