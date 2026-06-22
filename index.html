@@ -151,6 +151,9 @@ select.sinput{appearance:auto;}
         <div style="font-size:11px;color:var(--muted);margin-top:2px;">Day-of-session deliveries — send photos to clients</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <select id="sendlink-staff-filter" onchange="renderSendLinkSection()" style="padding:5px 10px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:#fff;min-width:120px;">
+          <option value="">All staff</option>
+        </select>
         <select id="sendlink-filter" onchange="renderSendLinkSection()" style="padding:5px 10px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:#fff;">
           <option value="today">Today</option>
           <option value="overdue">⚠ Overdue</option>
@@ -768,6 +771,36 @@ function renderSendLinkSection(){
   var badge = document.getElementById('sendlink-count-badge');
   if(badge){ badge.textContent = openCount; badge.style.background = openCount?'var(--gold)':'var(--muted)'; }
 
+  // Populate staff filter dropdown
+  var staffSel = document.getElementById('sendlink-staff-filter');
+  if(staffSel){
+    var currentStaff = staffSel.value;
+    var allStaff = TC_STAFF.map(function(s){ return s.name; });
+    allSendlinks.forEach(function(t){
+      if(t.assignedTo && allStaff.indexOf(t.assignedTo) === -1) allStaff.push(t.assignedTo);
+    });
+    allStaff.sort();
+    staffSel.innerHTML = '<option value="">All staff</option>' +
+      '<option value="__unassigned">— Unassigned —</option>' +
+      allStaff.map(function(n){
+        var c = staffColor(n);
+        return '<option value="'+escHtml(n)+'" style="background:'+c.bg+';color:'+c.fg+';">'+escHtml(n)+'</option>';
+      }).join('');
+    staffSel.value = currentStaff;
+    // Color the dropdown itself based on selected staff for visual feedback
+    if(currentStaff && currentStaff !== '__unassigned'){
+      var sc = staffColor(currentStaff);
+      staffSel.style.background = sc.bg;
+      staffSel.style.color = sc.fg;
+      staffSel.style.fontWeight = '600';
+    } else {
+      staffSel.style.background = '#fff';
+      staffSel.style.color = '';
+      staffSel.style.fontWeight = '';
+    }
+  }
+  var staffFilter = staffSel ? staffSel.value : '';
+
   // Always show section so users can add the first send-link
   section.style.display = '';
 
@@ -780,6 +813,12 @@ function renderSendLinkSection(){
   var weekStr = weekAhead.toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
 
   var tasks = allSendlinks.slice();
+  // Apply staff filter first
+  if(staffFilter === '__unassigned'){
+    tasks = tasks.filter(function(t){ return !t.assignedTo; });
+  } else if(staffFilter){
+    tasks = tasks.filter(function(t){ return t.assignedTo === staffFilter; });
+  }
   if(filter === 'today'){
     tasks = tasks.filter(function(t){ return t.stage !== 'delivered' && (t.dueDate === today || (!t.dueDate)); });
   } else if(filter === 'overdue'){
