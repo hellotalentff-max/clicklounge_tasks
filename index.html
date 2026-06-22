@@ -51,6 +51,9 @@ select.sinput{appearance:auto;}
 .task-card:hover{border-color:var(--teal);box-shadow:0 2px 8px rgba(47,79,79,0.08);transform:translateY(-1px);}
 .tc-title{font-size:13px;font-weight:600;color:var(--slate);margin-bottom:4px;}
 .tc-client{font-size:11px;color:var(--muted);margin-bottom:6px;}
+.tc-check{width:18px;height:18px;cursor:pointer;accent-color:var(--success);flex-shrink:0;margin-top:2px;}
+.tc-done{opacity:.6;background:rgba(58,125,92,0.04);}
+.tc-done .tc-title,.tc-done .task-list-item>div>div{text-decoration:line-through;color:var(--muted);}
 .tc-meta{display:flex;gap:6px;flex-wrap:wrap;}
 .tc-badge{font-size:9px;padding:2px 6px;border-radius:6px;font-weight:500;}
 
@@ -134,6 +137,9 @@ select.sinput{appearance:auto;}
 
   <!-- Category filter bar -->
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:0 4px;" id="cat-filter-bar"></div>
+
+  <!-- Staff color legend -->
+  <div id="staff-legend" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px 12px;background:var(--light);border-radius:10px;border:1px solid var(--border);"></div>
 
   <!-- Board view -->
   <div id="board-view">
@@ -240,6 +246,65 @@ var CUR_STAFF = '';
 var SHOW_ARCHIVED = false;
 var CLIENTS = [];
 var TC_STAFF = []; // Staff loaded from TimeCommand
+
+// ── Staff color palette ──
+// Deterministic color per staff name — colors are visually distinct, photographer-friendly
+var STAFF_COLORS = [
+  {bg:'#51897d', fg:'#fff'}, // teal
+  {bg:'#d79068', fg:'#fff'}, // gold/orange
+  {bg:'#5b7bb5', fg:'#fff'}, // blue
+  {bg:'#a45ba8', fg:'#fff'}, // purple
+  {bg:'#c0544a', fg:'#fff'}, // coral red
+  {bg:'#3a7d5c', fg:'#fff'}, // forest green
+  {bg:'#b88840', fg:'#fff'}, // amber
+  {bg:'#4f7d8a', fg:'#fff'}, // slate blue
+  {bg:'#9c5b8a', fg:'#fff'}, // magenta
+  {bg:'#7a8c4a', fg:'#fff'}, // olive
+  {bg:'#cc7a52', fg:'#fff'}, // rust
+  {bg:'#5a8c89', fg:'#fff'}, // sea green
+  {bg:'#8a6a3e', fg:'#fff'}, // bronze
+  {bg:'#7355a8', fg:'#fff'}, // violet
+  {bg:'#3d8a8a', fg:'#fff'}, // cyan
+  {bg:'#a85b5b', fg:'#fff'}  // brick
+];
+
+function staffColor(name){
+  if(!name) return {bg:'#cccccc', fg:'#666'};
+  // Override via localStorage map (admin can pick custom colors)
+  var customMap = {};
+  try { customMap = JSON.parse(localStorage.getItem('cl_staff_colors')||'{}'); } catch(e){}
+  if(customMap[name]) return customMap[name];
+  // Deterministic hash → palette index
+  var h = 0;
+  for(var i=0;i<name.length;i++) h = ((h<<5)-h + name.charCodeAt(i)) | 0;
+  return STAFF_COLORS[Math.abs(h) % STAFF_COLORS.length];
+}
+
+function staffInitials(name){
+  if(!name) return '?';
+  var parts = String(name).trim().split(/\s+/);
+  if(parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+}
+
+function staffBadge(name, size){
+  if(!name) return '<span style="font-size:10px;color:var(--muted);font-style:italic;">Unassigned</span>';
+  var c = staffColor(name);
+  size = size || 'normal';
+  var pad = size==='small' ? '2px 7px' : '3px 9px';
+  var font = size==='small' ? '10px' : '11px';
+  return '<span style="display:inline-flex;align-items:center;gap:5px;background:'+c.bg+';color:'+c.fg+';padding:'+pad+';border-radius:10px;font-size:'+font+';font-weight:600;line-height:1.2;">'+
+    '<span style="width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,0.25);display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;">'+staffInitials(name)+'</span>'+
+    escHtml(name)+
+  '</span>';
+}
+
+function staffAvatar(name, size){
+  size = size || 24;
+  if(!name) return '<span style="width:'+size+'px;height:'+size+'px;border-radius:50%;background:#e0e0e0;color:#999;display:inline-flex;align-items:center;justify-content:center;font-size:'+Math.round(size*0.4)+'px;font-weight:700;flex-shrink:0;">?</span>';
+  var c = staffColor(name);
+  return '<span title="'+escHtml(name)+'" style="width:'+size+'px;height:'+size+'px;border-radius:50%;background:'+c.bg+';color:'+c.fg+';display:inline-flex;align-items:center;justify-content:center;font-size:'+Math.round(size*0.4)+'px;font-weight:700;flex-shrink:0;">'+staffInitials(name)+'</span>';
+}
 
 // ================================================================
 //  UTILS
@@ -599,8 +664,95 @@ function loadTimeCommandStaff(){
 function render(){
   renderCategoryBar();
   populateStaffFilter();
+  renderStaffLegend();
   if(CUR_VIEW === 'board') renderKanban();
   else renderList();
+}
+
+function renderStaffLegend(){
+  var el = document.getElementById('staff-legend');
+  if(!el) return;
+  // Get all staff who have at least one active task, plus TC_STAFF
+  var taskAssigned = {};
+  (TASKS||[]).filter(function(t){ return !t.archived; }).forEach(function(t){
+    if(t.assignedTo) taskAssigned[t.assignedTo] = (taskAssigned[t.assignedTo]||0)+1;
+  });
+  // Union with TC_STAFF
+  var allNames = Object.keys(taskAssigned);
+  TC_STAFF.forEach(function(s){ if(allNames.indexOf(s.name)===-1) allNames.push(s.name); });
+  allNames.sort();
+
+  if(!allNames.length){
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = '';
+  el.innerHTML =
+    '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-right:4px;">Staff:</span>' +
+    allNames.map(function(name){
+      var c = staffColor(name);
+      var count = taskAssigned[name] || 0;
+      return '<span onclick="setStaffFilter(\''+name.replace(/'/g,"\\'")+'\');document.getElementById(\'staff-filter\').value=\''+name.replace(/'/g,"\\'")+'\'" style="display:inline-flex;align-items:center;gap:5px;background:'+c.bg+';color:'+c.fg+';padding:3px 9px;border-radius:12px;font-size:11px;font-weight:600;cursor:pointer;line-height:1.2;" title="Click to filter">'+
+        '<span style="width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,0.25);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">'+staffInitials(name)+'</span>'+
+        escHtml(name)+
+        (count?'<span style="opacity:.75;font-size:10px;">'+count+'</span>':'')+
+      '</span>';
+    }).join('') +
+    '<button onclick="openColorPicker()" style="margin-left:auto;background:transparent;border:1px dashed var(--border);color:var(--muted);font-size:10px;padding:3px 9px;border-radius:12px;cursor:pointer;">🎨 Customize Colors</button>';
+}
+
+// Color picker modal — admin can override auto-assigned colors per staff
+function openColorPicker(){
+  var taskAssigned = {};
+  (TASKS||[]).forEach(function(t){ if(t.assignedTo) taskAssigned[t.assignedTo] = 1; });
+  var allNames = Object.keys(taskAssigned);
+  TC_STAFF.forEach(function(s){ if(allNames.indexOf(s.name)===-1) allNames.push(s.name); });
+  allNames.sort();
+
+  var customMap = {};
+  try { customMap = JSON.parse(localStorage.getItem('cl_staff_colors')||'{}'); } catch(e){}
+
+  var html =
+    '<h3 style="margin-bottom:6px;">🎨 Customize Staff Colors</h3>'+
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Click any swatch to assign a different color to that staff member.</div>'+
+    '<div id="cp-staff-list">'+
+      allNames.map(function(name){
+        var c = staffColor(name);
+        return '<div style="display:flex;align-items:center;gap:12px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">'+
+          '<span style="width:32px;height:32px;border-radius:50%;background:'+c.bg+';color:'+c.fg+';display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">'+staffInitials(name)+'</span>'+
+          '<div style="flex:1;min-width:0;"><strong>'+escHtml(name)+'</strong></div>'+
+          '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">'+
+            STAFF_COLORS.map(function(col, idx){
+              var picked = (c.bg === col.bg);
+              return '<button onclick="setStaffColor(\''+name.replace(/'/g,"\\'")+'\','+idx+')" style="width:22px;height:22px;border-radius:50%;background:'+col.bg+';border:'+(picked?'3px solid var(--slate)':'2px solid #fff')+';cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.2);" title="'+col.bg+'"></button>';
+            }).join('')+
+            (customMap[name] ? '<button onclick="resetStaffColor(\''+name.replace(/'/g,"\\'")+'\')" style="font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);background:var(--light);cursor:pointer;color:var(--muted);">↺ Auto</button>' : '')+
+          '</div>'+
+        '</div>';
+      }).join('')+
+    '</div>'+
+    '<div class="fe" style="margin-top:14px;">'+
+      '<button class="btn btn-outline" onclick="closeModal()">Close</button>'+
+    '</div>';
+  openModal(html);
+}
+
+function setStaffColor(name, paletteIdx){
+  var customMap = {};
+  try { customMap = JSON.parse(localStorage.getItem('cl_staff_colors')||'{}'); } catch(e){}
+  customMap[name] = STAFF_COLORS[paletteIdx];
+  localStorage.setItem('cl_staff_colors', JSON.stringify(customMap));
+  openColorPicker(); // refresh modal
+  render();
+}
+
+function resetStaffColor(name){
+  var customMap = {};
+  try { customMap = JSON.parse(localStorage.getItem('cl_staff_colors')||'{}'); } catch(e){}
+  delete customMap[name];
+  localStorage.setItem('cl_staff_colors', JSON.stringify(customMap));
+  openColorPicker();
+  render();
 }
 
 function getFilteredTasks(){
@@ -645,15 +797,30 @@ function renderKanban(){
     stageTasks.forEach(function(t){
       var type = TASK_TYPES[t.type]||TASK_TYPES.other;
       var isOverdue = t.dueDate && t.dueDate < today && t.stage !== 'delivered';
-      html += '<div class="task-card" data-tid="'+t.id+'" onclick="openTaskDetail(this.dataset.tid)">'+
-        '<div class="tc-title">'+escHtml(t.title||'Untitled')+'</div>'+
-        '<div class="tc-client">'+type.icon+' '+escHtml(t.client||'No client')+'</div>'+
+      var sc = staffColor(t.assignedTo);
+      var stripeColor = t.assignedTo ? sc.bg : '#d0d0d0';
+      var isDone = t.stage === 'delivered' || t.done;
+      // Build timestamp display
+      var ts = '';
+      if(t.createdAt) ts += '<span title="Created" style="font-size:9px;color:var(--muted);">🕐 '+fmtTs(t.createdAt)+'</span>';
+      if(t.completedAt) ts += '<span title="Completed" style="font-size:9px;color:var(--success);margin-left:8px;">✓ '+fmtTs(t.completedAt)+'</span>';
+      html += '<div class="task-card'+(isDone?' tc-done':'')+'" data-tid="'+t.id+'" style="border-left:4px solid '+stripeColor+';" onclick="openTaskDetail(this.dataset.tid)">'+
+        '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">'+
+          '<input type="checkbox" class="tc-check" '+(isDone?'checked':'')+' onclick="event.stopPropagation();toggleTaskDone(\''+t.id+'\',this.checked);" title="Mark done">'+
+          staffAvatar(t.assignedTo, 26)+
+          '<div style="flex:1;min-width:0;">'+
+            '<div class="tc-title" style="margin-bottom:2px;">'+type.icon+' '+escHtml(type.label)+'</div>'+
+            (t.title ? '<div style="font-size:11px;color:var(--slate);margin-bottom:2px;">'+escHtml(t.title)+'</div>' : '')+
+            '<div class="tc-client">'+escHtml(t.client||'No client')+'</div>'+
+          '</div>'+
+        '</div>'+
         '<div class="tc-meta">'+
           '<span class="tc-badge" style="background:'+stage.bg+';color:'+stage.color+';">'+stage.label+'</span>'+
           (t.dueDate ? '<span class="tc-badge" style="background:'+(isOverdue?'rgba(192,84,74,0.1)':'var(--light)')+';color:'+(isOverdue?'var(--danger)':'var(--muted)')+';">📅 '+t.dueDate+'</span>' : '')+
           (t.priority==='high' ? '<span class="tc-badge" style="background:rgba(192,84,74,0.1);color:var(--danger);">🔴 High</span>' : '')+
           (t.driveLink ? '<span class="tc-badge" style="background:rgba(81,137,125,0.1);color:var(--teal);">📂 Drive</span>' : '')+
         '</div>'+
+        (ts ? '<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);">'+ts+'</div>' : '')+
       '</div>';
     });
     if(!stageTasks.length){
@@ -683,13 +850,22 @@ function renderList(){
     var type = TASK_TYPES[t.type]||TASK_TYPES.other;
     var isOverdue = t.dueDate && t.dueDate < today && t.stage !== 'delivered';
 
-    html += '<div class="task-list-item" data-tid="'+t.id+'" onclick="openTaskDetail(this.dataset.tid)">'+
-      '<div style="width:10px;height:10px;border-radius:50%;background:'+stage.color+';flex-shrink:0;"></div>'+
+    var sc = staffColor(t.assignedTo);
+    var stripeColor = t.assignedTo ? sc.bg : '#d0d0d0';
+    var isDone = t.stage === 'delivered' || t.done;
+    var ts = '';
+    if(t.createdAt) ts += '🕐 '+fmtTs(t.createdAt);
+    if(t.completedAt) ts += '  ·  ✓ '+fmtTs(t.completedAt);
+    html += '<div class="task-list-item'+(isDone?' tc-done':'')+'" data-tid="'+t.id+'" style="border-left:4px solid '+stripeColor+';" onclick="openTaskDetail(this.dataset.tid)">'+
+      '<input type="checkbox" class="tc-check" '+(isDone?'checked':'')+' onclick="event.stopPropagation();toggleTaskDone(\''+t.id+'\',this.checked);" title="Mark done">'+
+      staffAvatar(t.assignedTo, 28)+
       '<div style="flex:1;min-width:0;">'+
-        '<div style="font-weight:600;font-size:13px;color:var(--slate);">'+escHtml(t.title||'Untitled')+'</div>'+
-        '<div style="font-size:11px;color:var(--muted);">'+type.icon+' '+escHtml(t.client||'—')+
+        '<div style="font-weight:600;font-size:13px;color:var(--slate);">'+type.icon+' '+escHtml(type.label)+'</div>'+
+        (t.title ? '<div style="font-size:11px;color:var(--slate);margin-top:1px;">'+escHtml(t.title)+'</div>' : '')+
+        '<div style="font-size:10px;color:var(--muted);margin-top:2px;">'+escHtml(t.client||'—')+
+          (t.assignedTo ? ' · '+escHtml(t.assignedTo) : '')+
           (t.dueDate ? ' · 📅 '+t.dueDate : '')+
-          (t.notes ? ' · '+escHtml(String(t.notes).slice(0,40)) : '')+
+          (ts ? ' · '+ts : '')+
         '</div>'+
       '</div>'+
       '<span class="tc-badge" style="background:'+stage.bg+';color:'+stage.color+';flex-shrink:0;">'+stage.label+'</span>'+
@@ -941,16 +1117,39 @@ function openTaskDetail(id){
     stageOpts += '<option value="'+s.id+'"'+sel+'>'+s.label+'</option>';
   });
 
+  // Timestamps panel (only for existing tasks)
+  var tsPanel = '';
+  if(t){
+    var rows = [];
+    if(t.createdAt)   rows.push('<div><span style="color:var(--muted);font-size:10px;">🕐 Created:</span> <strong>'+fmtTs(t.createdAt)+'</strong></div>');
+    if(t.updatedAt && t.updatedAt !== t.createdAt) rows.push('<div><span style="color:var(--muted);font-size:10px;">✏ Last updated:</span> <strong>'+fmtTs(t.updatedAt)+'</strong></div>');
+    if(t.completedAt) rows.push('<div><span style="color:var(--success);font-size:10px;">✓ Completed:</span> <strong>'+fmtTs(t.completedAt)+'</strong></div>');
+    if(t.createdAt && t.completedAt){
+      try {
+        var c = new Date(t.createdAt), d = new Date(t.completedAt);
+        var hours = (d-c)/(1000*60*60);
+        var label = hours < 1 ? Math.round(hours*60)+' min' :
+                    hours < 24 ? hours.toFixed(1)+' hours' :
+                    (hours/24).toFixed(1)+' days';
+        rows.push('<div style="margin-top:4px;padding-top:6px;border-top:1px dashed var(--border);"><span style="color:var(--muted);font-size:10px;">⏱ Duration:</span> <strong style="color:var(--teal);">'+label+'</strong></div>');
+      } catch(e){}
+    }
+    if(rows.length){
+      tsPanel = '<div style="background:var(--light);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;line-height:1.7;">'+rows.join('')+'</div>';
+    }
+  }
+
   var html =
     '<h3 style="margin-bottom:16px;">'+(isNew?'+ New Task':'✏ Edit Task')+'</h3>'+
-    '<div class="field"><label>Title *</label>'+
-      '<input type="text" id="td-title" class="sinput" value="'+escHtml(t?t.title:'')+'" placeholder="e.g. Edit photos for Juan"></div>'+
+    tsPanel +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+      '<div class="field"><label>Type *</label>'+
+        '<select id="td-type" class="sinput">'+typeOpts+'</select></div>'+
       '<div class="field"><label>Client</label>'+
         '<select id="td-client" class="sinput" onchange="showTaskClientInfo()">'+clientOpts+'</select></div>'+
-      '<div class="field"><label>Type</label>'+
-        '<select id="td-type" class="sinput">'+typeOpts+'</select></div>'+
     '</div>'+
+    '<div class="field"><label>Description <span style="color:var(--muted);font-weight:400;font-size:11px;">(optional — auto-filled from Type if blank)</span></label>'+
+      '<input type="text" id="td-title" class="sinput" value="'+escHtml(t?t.title:'')+'" placeholder="Optional extra detail e.g. specific shoot date or instructions"></div>'+
     '<div id="td-client-info" style="display:none;background:var(--light);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;"></div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
       '<div class="field"><label>Stage</label>'+
@@ -1052,6 +1251,36 @@ async function sendDriveLink(taskId){
   }
 }
 
+function nowTs(){
+  // ISO timestamp in Philippine time
+  var d = new Date();
+  var t = d.toLocaleString('en-CA', {timeZone:'Asia/Manila', hour12:false}).replace(', ','T');
+  return t; // e.g. "2026-06-21T14:35:22"
+}
+function fmtTs(ts){
+  if(!ts) return '';
+  // Convert ISO timestamp to "Jun 21, 2:35pm" style
+  try {
+    var s = String(ts);
+    var datePart, timePart;
+    if(s.indexOf('T')>-1){ datePart = s.split('T')[0]; timePart = s.split('T')[1]||''; }
+    else if(s.indexOf(' ')>-1){ datePart = s.split(' ')[0]; timePart = s.split(' ')[1]||''; }
+    else { datePart = s; timePart = ''; }
+    var parts = datePart.split('-');
+    if(parts.length<3) return s;
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var label = months[parseInt(parts[1])-1]+' '+parseInt(parts[2]);
+    if(timePart){
+      var hm = timePart.split(':');
+      var h = parseInt(hm[0]), m = hm[1]||'00';
+      var ampm = h>=12?'pm':'am';
+      var h12 = h%12; if(h12===0) h12=12;
+      label += ', '+h12+':'+m+ampm;
+    }
+    return label;
+  } catch(e){ return ts; }
+}
+
 function saveTask(existingId){
   var title    = (document.getElementById('td-title').value||'').trim();
   var client   = document.getElementById('td-client').value||'';
@@ -1063,14 +1292,28 @@ function saveTask(existingId){
   var driveLink= (document.getElementById('td-drive').value||'').trim();
   var notes    = (document.getElementById('td-notes').value||'').trim();
 
-  if(!title){ notify('Title is required','error'); return; }
+  // Title is now optional — Type serves as the standard title
+  // If no title given, fall back to type label
+  if(!title){
+    var tp = TASK_TYPES[type]||TASK_TYPES.other;
+    title = tp.label + (client ? ' — '+client : '');
+  }
+
+  var now = nowTs();
 
   if(existingId){
     var t = TASKS.find(function(x){return x.id===existingId;});
     if(t){
+      var wasDelivered = (t.stage === 'delivered');
+      var nowDelivered = (stage === 'delivered');
       t.title = title; t.client = client; t.type = type; t.stage = stage;
       t.dueDate = dueDate; t.due = dueDate; t.priority = priority; t.assignedTo = assigned;
-      t.driveLink = driveLink; t.notes = notes; t.updatedAt = todayStr();
+      t.driveLink = driveLink; t.notes = notes; t.updatedAt = now;
+      // Track completion timestamp
+      if(nowDelivered && !wasDelivered) t.completedAt = now;
+      else if(!nowDelivered && wasDelivered) t.completedAt = '';
+      // Ensure createdAt exists for legacy tasks
+      if(!t.createdAt) t.createdAt = now;
       pushTask(t, false);
       notify('Task updated ✓','success');
     }
@@ -1079,13 +1322,36 @@ function saveTask(existingId){
       id: uid(), title: title, client: client, type: type, stage: stage,
       dueDate: dueDate, priority: priority, assignedTo: assigned,
       driveLink: driveLink, notes: notes,
-      createdAt: todayStr(), updatedAt: todayStr(), archived: false, due: dueDate
+      createdAt: now, updatedAt: now,
+      completedAt: (stage === 'delivered' ? now : ''),
+      archived: false, due: dueDate
     };
     TASKS.push(task);
     pushTask(task, true);
     notify('Task created ✓','success');
   }
   closeModal();
+  render();
+}
+
+// ── Toggle done from checkbox on the card itself ──
+function toggleTaskDone(id, isDone){
+  var t = TASKS.find(function(x){return x.id===id;});
+  if(!t) return;
+  var now = nowTs();
+  if(isDone){
+    t.stage = 'delivered';
+    t.done = true;
+    if(!t.completedAt) t.completedAt = now;
+  } else {
+    // Move back to "new" or whichever previous stage; default to new
+    t.stage = 'new';
+    t.done = false;
+    t.completedAt = '';
+  }
+  if(!t.createdAt) t.createdAt = now;
+  t.updatedAt = now;
+  pushTask(t, false);
   render();
 }
 
