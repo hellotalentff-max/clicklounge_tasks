@@ -127,7 +127,6 @@ select.sinput{appearance:auto;}
       <button class="filter-btn active" data-f="all" onclick="setFilter('all')">All</button>
       <button class="filter-btn" data-f="new" onclick="setFilter('new')">🆕 New</button>
       <button class="filter-btn" data-f="inprogress" onclick="setFilter('inprogress')">⚙ In Progress</button>
-      <button class="filter-btn" data-f="review" onclick="setFilter('review')">👁 Review</button>
       <button class="filter-btn" data-f="pickup" onclick="setFilter('pickup')">📦 Ready</button>
       <button class="filter-btn" data-f="delivered" onclick="setFilter('delivered')">✓ Delivered</button>
       <button class="filter-btn" data-f="overdue" onclick="setFilter('overdue')">⚠ Overdue</button>
@@ -140,6 +139,31 @@ select.sinput{appearance:auto;}
 
   <!-- Staff color legend -->
   <div id="staff-legend" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px 12px;background:var(--light);border-radius:10px;border:1px solid var(--border);"></div>
+
+  <!-- 📤 Send Link Queue — separate from kanban, high priority today's deliveries -->
+  <div id="sendlink-section" style="display:none;background:linear-gradient(135deg,rgba(215,144,104,0.10),rgba(215,144,104,0.04));border:1.5px solid rgba(215,144,104,0.25);border-radius:12px;padding:14px 16px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--slate);display:flex;align-items:center;gap:8px;">
+          📤 Send Link Queue
+          <span id="sendlink-count-badge" style="background:var(--gold);color:#fff;padding:2px 9px;border-radius:10px;font-size:10px;">0</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Day-of-session deliveries — send photos to clients</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <select id="sendlink-filter" onchange="renderSendLinkSection()" style="padding:5px 10px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:#fff;">
+          <option value="today">Today</option>
+          <option value="overdue">⚠ Overdue</option>
+          <option value="upcoming">📅 Upcoming (7 days)</option>
+          <option value="open">All Open</option>
+          <option value="done">✓ Sent</option>
+        </select>
+        <button class="btn btn-sm btn-gold" onclick="openNewSendLink()">+ New Send Link</button>
+        <button class="btn btn-sm btn-outline" onclick="toggleSendLinkCollapsed()" id="sendlink-collapse-btn">⌃ Collapse</button>
+      </div>
+    </div>
+    <div id="sendlink-list"></div>
+  </div>
 
   <!-- Board view -->
   <div id="board-view">
@@ -164,7 +188,6 @@ select.sinput{appearance:auto;}
 var STAGES = [
   {id:'new',        label:'New',         color:'var(--teal)',   bg:'rgba(81,137,125,0.08)'},
   {id:'inprogress', label:'In Progress', color:'var(--gold)',   bg:'rgba(215,144,104,0.08)'},
-  {id:'review',     label:'For Review',  color:'#5b63d9',      bg:'rgba(91,99,217,0.08)'},
   {id:'pickup',     label:'Ready',       color:'var(--success)',bg:'rgba(61,140,110,0.08)'},
   {id:'delivered',  label:'Delivered',   color:'var(--muted)',  bg:'rgba(107,128,128,0.08)'}
 ];
@@ -662,17 +685,49 @@ function loadTimeCommandStaff(){
 //  RENDER
 // ================================================================
 function render(){
+  autoPromoteTasks();
+  migrateLegacyStages();
   renderCategoryBar();
   populateStaffFilter();
   renderStaffLegend();
+  renderSendLinkSection();
   if(CUR_VIEW === 'board') renderKanban();
   else renderList();
+}
+
+// Migrate any 'review' stage tasks (from before review was removed) to 'inprogress'
+function migrateLegacyStages(){
+  var changed = false;
+  (TASKS||[]).forEach(function(t){
+    if(t.stage === 'review'){ t.stage = 'inprogress'; changed = true; }
+  });
+  if(changed) saveTasks();
+}
+
+// Auto-promote 'new' tasks to 'inprogress' when due within 7 days
+function autoPromoteTasks(){
+  var today = todayStr();
+  var sevenDays = new Date();
+  sevenDays.setDate(sevenDays.getDate() + 7);
+  var weekFromNow = sevenDays.toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
+  var changed = false;
+  (TASKS||[]).forEach(function(t){
+    if(t.archived) return;
+    if(t.stage !== 'new') return;
+    if(!t.dueDate) return;
+    // If due date is between today and 7 days from now → promote
+    if(t.dueDate <= weekFromNow){
+      t.stage = 'inprogress';
+      t.updatedAt = nowTs();
+      changed = true;
+    }
+  });
+  if(changed) saveTasks();
 }
 
 function renderStaffLegend(){
   var el = document.getElementById('staff-legend');
   if(!el) return;
-  // Get all staff who have at least one active task, plus TC_STAFF
   var taskAssigned = {};
   (TASKS||[]).filter(function(t){ return !t.archived; }).forEach(function(t){
     if(t.assignedTo) taskAssigned[t.assignedTo] = (taskAssigned[t.assignedTo]||0)+1;
@@ -699,6 +754,111 @@ function renderStaffLegend(){
       '</span>';
     }).join('') +
     '<button onclick="openColorPicker()" style="margin-left:auto;background:transparent;border:1px dashed var(--border);color:var(--muted);font-size:10px;padding:3px 9px;border-radius:12px;cursor:pointer;">🎨 Customize Colors</button>';
+}
+
+// ── SEND LINK QUEUE — separate section for day-of-session deliveries ──
+var SENDLINK_COLLAPSED = false;
+
+function renderSendLinkSection(){
+  var section = document.getElementById('sendlink-section');
+  if(!section) return;
+  var allSendlinks = (TASKS||[]).filter(function(t){ return t.type === 'sendlink' && !t.archived; });
+  // Show the badge with open count
+  var openCount = allSendlinks.filter(function(t){ return t.stage !== 'delivered'; }).length;
+  var badge = document.getElementById('sendlink-count-badge');
+  if(badge){ badge.textContent = openCount; badge.style.background = openCount?'var(--gold)':'var(--muted)'; }
+
+  // Always show section so users can add the first send-link
+  section.style.display = '';
+
+  var listEl = document.getElementById('sendlink-list');
+  if(SENDLINK_COLLAPSED){ listEl.innerHTML = ''; return; }
+
+  var filter = (document.getElementById('sendlink-filter')||{}).value || 'today';
+  var today = todayStr();
+  var weekAhead = new Date(); weekAhead.setDate(weekAhead.getDate()+7);
+  var weekStr = weekAhead.toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
+
+  var tasks = allSendlinks.slice();
+  if(filter === 'today'){
+    tasks = tasks.filter(function(t){ return t.stage !== 'delivered' && (t.dueDate === today || (!t.dueDate)); });
+  } else if(filter === 'overdue'){
+    tasks = tasks.filter(function(t){ return t.stage !== 'delivered' && t.dueDate && t.dueDate < today; });
+  } else if(filter === 'upcoming'){
+    tasks = tasks.filter(function(t){ return t.stage !== 'delivered' && t.dueDate && t.dueDate > today && t.dueDate <= weekStr; });
+  } else if(filter === 'open'){
+    tasks = tasks.filter(function(t){ return t.stage !== 'delivered'; });
+  } else if(filter === 'done'){
+    tasks = tasks.filter(function(t){ return t.stage === 'delivered'; });
+  }
+
+  // Sort: overdue first (oldest due first), then today, then upcoming, then done at bottom
+  tasks.sort(function(a,b){
+    if(a.stage === 'delivered' && b.stage !== 'delivered') return 1;
+    if(b.stage === 'delivered' && a.stage !== 'delivered') return -1;
+    var da = a.dueDate || '9999-12-31';
+    var db = b.dueDate || '9999-12-31';
+    return da.localeCompare(db);
+  });
+
+  if(!tasks.length){
+    var emptyMsg = filter==='today' ? '✨ No deliveries needed today.' :
+                   filter==='overdue' ? '✓ No overdue send-links.' :
+                   filter==='done' ? 'No deliveries marked sent yet.' :
+                   'Nothing matches this filter.';
+    listEl.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:14px;text-align:center;background:#fff;border-radius:8px;">'+emptyMsg+'</div>';
+    return;
+  }
+
+  listEl.innerHTML = tasks.map(function(t){
+    var isOverdue = t.dueDate && t.dueDate < today && t.stage !== 'delivered';
+    var isToday = t.dueDate === today && t.stage !== 'delivered';
+    var isDone = t.stage === 'delivered' || t.done;
+    var sc = staffColor(t.assignedTo);
+    var bgRow = isDone ? '#f8faf9' : isOverdue ? 'rgba(192,84,74,0.06)' : isToday ? '#fff' : '#fff';
+    var dueLabel = '';
+    if(t.dueDate){
+      if(t.dueDate === today) dueLabel = '<span style="color:var(--gold);font-weight:700;">📅 TODAY</span>';
+      else if(isOverdue){
+        var days = Math.floor((new Date(today)-new Date(t.dueDate))/(1000*60*60*24));
+        dueLabel = '<span style="color:var(--danger);font-weight:700;">⚠ '+days+'d overdue</span>';
+      } else {
+        dueLabel = '<span style="color:var(--muted);">📅 '+t.dueDate+'</span>';
+      }
+    }
+    return '<div onclick="openTaskDetail(\''+t.id+'\')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:'+bgRow+';border:1px solid var(--border);border-left:4px solid '+(t.assignedTo?sc.bg:'#d0d0d0')+';border-radius:8px;margin-bottom:6px;cursor:pointer;'+(isDone?'opacity:.55;':'')+'">'+
+      '<input type="checkbox" class="tc-check" '+(isDone?'checked':'')+' onclick="event.stopPropagation();toggleTaskDone(\''+t.id+'\',this.checked);" title="Mark sent">'+
+      staffAvatar(t.assignedTo, 26)+
+      '<div style="flex:1;min-width:0;'+(isDone?'text-decoration:line-through;':'')+'">'+
+        '<div style="font-size:12px;font-weight:600;color:var(--slate);">📤 '+escHtml(t.client||'(no client)')+(t.title?' — '+escHtml(t.title):'')+'</div>'+
+        '<div style="font-size:10px;color:var(--muted);margin-top:1px;">'+
+          (t.assignedTo?escHtml(t.assignedTo)+' · ':'')+
+          dueLabel+
+          (t.completedAt?' · ✓ Sent '+fmtTs(t.completedAt):'')+
+        '</div>'+
+      '</div>'+
+      (t.driveLink ? '<a href="'+escHtml(t.driveLink)+'" target="_blank" onclick="event.stopPropagation()" class="btn btn-sm btn-teal" style="text-decoration:none;padding:5px 10px;font-size:10px;flex-shrink:0;">📂 Drive</a>' : '')+
+      (!isDone && t.driveLink ? '<button onclick="event.stopPropagation();sendDriveLink(\''+t.id+'\')" class="btn btn-sm btn-gold" style="padding:5px 10px;font-size:10px;flex-shrink:0;">📤 Send</button>' : '')+
+    '</div>';
+  }).join('');
+}
+
+function toggleSendLinkCollapsed(){
+  SENDLINK_COLLAPSED = !SENDLINK_COLLAPSED;
+  var btn = document.getElementById('sendlink-collapse-btn');
+  if(btn) btn.textContent = SENDLINK_COLLAPSED ? '⌄ Expand' : '⌃ Collapse';
+  renderSendLinkSection();
+}
+
+function openNewSendLink(){
+  // Open new task modal pre-set to sendlink type, due today
+  openTaskDetail(null);
+  setTimeout(function(){
+    var typeSel = document.getElementById('td-type');
+    if(typeSel) typeSel.value = 'sendlink';
+    var dueInp = document.getElementById('td-due');
+    if(dueInp && !dueInp.value) dueInp.value = todayStr();
+  }, 60);
 }
 
 // Color picker modal — admin can override auto-assigned colors per staff
@@ -760,6 +920,8 @@ function getFilteredTasks(){
     if(SHOW_ARCHIVED) return t.archived;
     return !t.archived;
   });
+  // Always exclude sendlink from main board — they live in their own section
+  tasks = tasks.filter(function(t){ return t.type !== 'sendlink'; });
   if(CUR_FILTER !== 'all'){
     if(CUR_FILTER === 'overdue'){
       var today = todayStr();
