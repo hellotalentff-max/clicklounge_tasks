@@ -96,9 +96,14 @@ select.sinput{appearance:auto;}
   <div id="settings-panel" style="display:none;" class="card">
     <div class="ct">⚙ Connection Settings</div>
     <div class="field">
-      <label>Apps Script URL</label>
+      <label>Apps Script URL <span style="color:var(--muted);font-weight:400;font-size:11px;">(POS / Tasks)</span></label>
       <input type="url" id="task-url" class="sinput" placeholder="https://script.google.com/macros/s/.../exec">
       <div style="font-size:10px;color:var(--muted);margin-top:4px;">Same URL as your CLS OS Control Hub.</div>
+    </div>
+    <div class="field">
+      <label>TimeCommand URL <span style="color:var(--muted);font-weight:400;font-size:11px;">(for staff list)</span></label>
+      <input type="url" id="tc-url" class="sinput" placeholder="https://script.google.com/macros/s/.../exec">
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;">Your TimeCommand GAS URL. Used to populate the Assigned To dropdown.</div>
     </div>
     <div class="fe">
       <button class="btn btn-teal" onclick="saveSettings()">💾 Save & Sync</button>
@@ -110,7 +115,11 @@ select.sinput{appearance:auto;}
     <button class="btn btn-sm btn-teal" id="view-board-btn" onclick="setView('board')">⊞ Board</button>
     <button class="btn btn-sm btn-outline" id="view-list-btn" onclick="setView('list')">☰ List</button>
     <button class="btn btn-sm btn-outline" id="view-archive-btn" onclick="toggleArchived()">📦 Archived</button>
+    <button class="btn btn-sm btn-outline" onclick="openReportModal()">📊 Report</button>
     <div style="flex:1;"></div>
+    <select id="staff-filter" onchange="setStaffFilter(this.value)" style="padding:5px 10px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:var(--light);min-width:130px;">
+      <option value="">All staff</option>
+    </select>
     <div style="display:flex;gap:6px;flex-wrap:wrap;" id="filter-bar">
       <button class="filter-btn active" data-f="all" onclick="setFilter('all')">All</button>
       <button class="filter-btn" data-f="new" onclick="setFilter('new')">🆕 New</button>
@@ -122,6 +131,9 @@ select.sinput{appearance:auto;}
     </div>
     <button class="btn btn-gold" onclick="openNewTask()">+ New Task</button>
   </div>
+
+  <!-- Category filter bar -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:0 4px;" id="cat-filter-bar"></div>
 
   <!-- Board view -->
   <div id="board-view">
@@ -152,21 +164,82 @@ var STAGES = [
 ];
 
 var TASK_TYPES = {
-  editing:    {label:'Photo Editing',   icon:'🖼'},
-  printing:   {label:'Printing',        icon:'🖨'},
-  framing:    {label:'Framing',         icon:'🖼'},
-  video:      {label:'Video Editing',   icon:'🎬'},
-  sendlink:   {label:'Send Link',       icon:'📤'},
-  delivery:   {label:'Delivery/Pickup', icon:'📦'},
-  other:      {label:'Other',           icon:'📋'}
+  // ── Client Work (revenue-generating, time-sensitive) ──
+  editing:     {label:'Photo Editing',    icon:'🖼', category:'client', categoryLabel:'Client Work'},
+  video:       {label:'Video Editing',    icon:'🎬', category:'client', categoryLabel:'Client Work'},
+  printing:    {label:'Printing',         icon:'🖨', category:'client', categoryLabel:'Client Work'},
+  framing:     {label:'Framing',          icon:'🪟', category:'client', categoryLabel:'Client Work'},
+  sendlink:    {label:'Send Link',        icon:'📤', category:'client', categoryLabel:'Client Work'},
+  delivery:    {label:'Delivery/Pickup',  icon:'📦', category:'client', categoryLabel:'Client Work'},
+  retouching:  {label:'Retouching',       icon:'✨', category:'client', categoryLabel:'Client Work'},
+  reshoot:     {label:'Reshoot/Reprint',  icon:'🔁', category:'client', categoryLabel:'Client Work'},
+  followup:    {label:'Client Follow-up', icon:'📞', category:'client', categoryLabel:'Client Work'},
+
+  // ── Content & Marketing ──
+  content:     {label:'Content Creation',     icon:'📷', category:'marketing', categoryLabel:'Content & Marketing'},
+  scheduling:  {label:'Content Scheduling',   icon:'📅', category:'marketing', categoryLabel:'Content & Marketing'},
+  copy:        {label:'Copywriting/Captions', icon:'✍️', category:'marketing', categoryLabel:'Content & Marketing'},
+  reels:       {label:'Reels/TikTok',         icon:'🎞', category:'marketing', categoryLabel:'Content & Marketing'},
+  bts:         {label:'BTS / Behind Scenes',  icon:'🎥', category:'marketing', categoryLabel:'Content & Marketing'},
+  ads:         {label:'Ad Campaign',          icon:'📣', category:'marketing', categoryLabel:'Content & Marketing'},
+  collab:      {label:'Influencer/Collab',    icon:'🤝', category:'marketing', categoryLabel:'Content & Marketing'},
+  newsletter:  {label:'Newsletter/Email',     icon:'📧', category:'marketing', categoryLabel:'Content & Marketing'},
+  seo:         {label:'SEO / Website',        icon:'🌐', category:'marketing', categoryLabel:'Content & Marketing'},
+  review:      {label:'Review Request',       icon:'⭐', category:'marketing', categoryLabel:'Content & Marketing'},
+
+  // ── Studio Operations ──
+  cleaning:    {label:'Studio Cleaning',     icon:'🧹', category:'ops', categoryLabel:'Studio Operations'},
+  inventory:   {label:'Inventory Check',     icon:'📋', category:'ops', categoryLabel:'Studio Operations'},
+  restock:     {label:'Restock Supplies',    icon:'🛒', category:'ops', categoryLabel:'Studio Operations'},
+  equipment:   {label:'Equipment Maint.',    icon:'🔧', category:'ops', categoryLabel:'Studio Operations'},
+  setup:       {label:'Set Design/Setup',    icon:'🎨', category:'ops', categoryLabel:'Studio Operations'},
+  laundry:     {label:'Laundry/Linens',      icon:'👕', category:'ops', categoryLabel:'Studio Operations'},
+  props:       {label:'Props Management',    icon:'🎭', category:'ops', categoryLabel:'Studio Operations'},
+  backup:      {label:'File Backup',         icon:'💾', category:'ops', categoryLabel:'Studio Operations'},
+  archive:     {label:'Archive Old Files',   icon:'🗄', category:'ops', categoryLabel:'Studio Operations'},
+
+  // ── Financial ──
+  invoicing:   {label:'Invoicing',           icon:'🧾', category:'finance', categoryLabel:'Financial'},
+  collections: {label:'Collections/AR',      icon:'💰', category:'finance', categoryLabel:'Financial'},
+  payroll:     {label:'Payroll Prep',        icon:'💵', category:'finance', categoryLabel:'Financial'},
+  bills:       {label:'Bills Payment',       icon:'📃', category:'finance', categoryLabel:'Financial'},
+  bookkeeping: {label:'Bookkeeping',         icon:'📊', category:'finance', categoryLabel:'Financial'},
+  bankrecon:   {label:'Bank Reconciliation', icon:'🏦', category:'finance', categoryLabel:'Financial'},
+  taxes:       {label:'Tax Filing',          icon:'🏛', category:'finance', categoryLabel:'Financial'},
+  budget:      {label:'Budget Review',       icon:'💹', category:'finance', categoryLabel:'Financial'},
+
+  // ── Admin / HR / Staff Development ──
+  training:    {label:'Staff Training',      icon:'🎓', category:'admin', categoryLabel:'Admin & HR'},
+  evaluation:  {label:'Staff Evaluation',    icon:'⭐', category:'admin', categoryLabel:'Admin & HR'},
+  meeting:     {label:'Team Meeting',        icon:'👥', category:'admin', categoryLabel:'Admin & HR'},
+  onboarding:  {label:'New Hire Onboarding', icon:'🆕', category:'admin', categoryLabel:'Admin & HR'},
+  scheduling2: {label:'Staff Scheduling',    icon:'🗓', category:'admin', categoryLabel:'Admin & HR'},
+  policy:      {label:'Policy/SOP Update',   icon:'📜', category:'admin', categoryLabel:'Admin & HR'},
+  research:    {label:'Research / R&D',      icon:'🔬', category:'admin', categoryLabel:'Admin & HR'},
+
+  // ── Other ──
+  other:       {label:'Other',               icon:'📋', category:'other', categoryLabel:'Other'}
 };
+
+var TASK_CATEGORIES = [
+  {id:'all',       label:'All',            icon:'📋'},
+  {id:'client',    label:'Client Work',    icon:'👤'},
+  {id:'marketing', label:'Content & Marketing', icon:'📣'},
+  {id:'ops',       label:'Studio Ops',     icon:'🏠'},
+  {id:'finance',   label:'Financial',      icon:'💰'},
+  {id:'admin',     label:'Admin & HR',     icon:'⚙'},
+  {id:'other',     label:'Other',          icon:'📌'}
+];
 
 var TASKS = [];
 var _lastSaveTime = 0;
 var CUR_VIEW = 'board';
 var CUR_FILTER = 'all';
+var CUR_CATEGORY = 'all';
+var CUR_STAFF = '';
 var SHOW_ARCHIVED = false;
 var CLIENTS = [];
+var TC_STAFF = []; // Staff loaded from TimeCommand
 
 // ================================================================
 //  UTILS
@@ -420,6 +493,50 @@ function setFilter(f){
   render();
 }
 
+function setCategory(c){
+  CUR_CATEGORY = c;
+  document.querySelectorAll('.cat-btn').forEach(function(btn){
+    btn.classList.toggle('active', btn.dataset.c === c);
+  });
+  render();
+}
+
+function setStaffFilter(s){
+  CUR_STAFF = s || '';
+  render();
+}
+
+function renderCategoryBar(){
+  var bar = document.getElementById('cat-filter-bar');
+  if(!bar) return;
+  // Count tasks per category (only active ones)
+  var allActive = (TASKS||[]).filter(function(t){ return !t.archived; });
+  bar.innerHTML = TASK_CATEGORIES.map(function(c){
+    var count = c.id==='all' ? allActive.length : allActive.filter(function(t){
+      var tc = (TASK_TYPES[t.type] && TASK_TYPES[t.type].category) || 'other';
+      return tc === c.id;
+    }).length;
+    var active = CUR_CATEGORY === c.id;
+    return '<button class="cat-btn filter-btn'+(active?' active':'')+'" data-c="'+c.id+'" onclick="setCategory(\''+c.id+'\')">'+c.icon+' '+c.label+(count?' <span style="opacity:.6;font-size:10px;margin-left:2px;">'+count+'</span>':'')+'</button>';
+  }).join('');
+}
+
+function populateStaffFilter(){
+  var sel = document.getElementById('staff-filter');
+  if(!sel) return;
+  var current = sel.value;
+  // Merge TC_STAFF + any assignedTo names found in tasks
+  var names = TC_STAFF.map(function(s){ return s.name; });
+  (TASKS||[]).forEach(function(t){
+    if(t.assignedTo && names.indexOf(t.assignedTo)===-1) names.push(t.assignedTo);
+  });
+  names.sort();
+  sel.innerHTML = '<option value="">All staff</option>' +
+    '<option value="__unassigned">— Unassigned —</option>' +
+    names.map(function(n){ return '<option value="'+escHtml(n)+'">'+escHtml(n)+'</option>'; }).join('');
+  sel.value = current;
+}
+
 function toggleArchived(){
   SHOW_ARCHIVED = !SHOW_ARCHIVED;
   var btn = document.getElementById('view-archive-btn');
@@ -439,15 +556,49 @@ function saveSettings(){
   var url = (document.getElementById('task-url').value||'').trim();
   if(!url){ notify('Enter the Apps Script URL','error'); return; }
   localStorage.setItem('cl_tasks_url', url);
-  notify('URL saved ✓','success');
+  var tcUrl = (document.getElementById('tc-url').value||'').trim();
+  if(tcUrl) localStorage.setItem('cl_tc_url', tcUrl);
+  notify('Settings saved ✓','success');
   document.getElementById('settings-panel').style.display = 'none';
   syncAll();
+  loadTimeCommandStaff();
+}
+
+// ── TimeCommand staff loader ──
+function loadTimeCommandStaff(){
+  var tcUrl = localStorage.getItem('cl_tc_url') || '';
+  if(!tcUrl) return;
+  try {
+    var b = btoa(unescape(encodeURIComponent(JSON.stringify({action:'getStaffNames', payload:{}}))));
+    var url = tcUrl + '?d=' + encodeURIComponent(b) + '&action=getStaffNames';
+    var cb = '_tcs' + Date.now() + Math.random().toString(36).slice(2);
+    var sid = cb + '_s';
+    var tm = setTimeout(function(){
+      delete window[cb];
+      var el = document.getElementById(sid); if(el) el.remove();
+    }, 15000);
+    window[cb] = function(d){
+      clearTimeout(tm); delete window[cb];
+      var el = document.getElementById(sid); if(el) el.remove();
+      if(d && d.ok && Array.isArray(d.staff)){
+        TC_STAFF = d.staff;
+        render();
+      }
+    };
+    var s = document.createElement('script');
+    s.id = sid;
+    s.src = url + '&callback=' + cb;
+    s.onerror = function(){ clearTimeout(tm); delete window[cb]; s.remove(); };
+    document.body.appendChild(s);
+  } catch(e){}
 }
 
 // ================================================================
 //  RENDER
 // ================================================================
 function render(){
+  renderCategoryBar();
+  populateStaffFilter();
   if(CUR_VIEW === 'board') renderKanban();
   else renderList();
 }
@@ -464,6 +615,16 @@ function getFilteredTasks(){
     } else {
       tasks = tasks.filter(function(t){ return t.stage === CUR_FILTER; });
     }
+  }
+  if(CUR_CATEGORY !== 'all'){
+    tasks = tasks.filter(function(t){
+      var tc = (TASK_TYPES[t.type] && TASK_TYPES[t.type].category) || 'other';
+      return tc === CUR_CATEGORY;
+    });
+  }
+  if(CUR_STAFF){
+    if(CUR_STAFF === '__unassigned') tasks = tasks.filter(function(t){ return !t.assignedTo; });
+    else tasks = tasks.filter(function(t){ return t.assignedTo === CUR_STAFF; });
   }
   return tasks;
 }
@@ -543,6 +704,172 @@ function renderList(){
 // ================================================================
 function openNewTask(){ openTaskDetail(null); }
 
+// ── STAFF PRODUCTIVITY REPORT ──
+function openReportModal(){
+  var today = todayStr();
+  // Default to this month
+  var d = new Date();
+  var monthStart = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';
+  var html =
+    '<h3 style="margin-bottom:6px;">📊 Staff Productivity Report</h3>'+
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Track who completes what — by category, on-time rate, throughput.</div>'+
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap;background:var(--light);padding:10px;border-radius:8px;">'+
+      '<label style="font-size:11px;color:var(--muted);">From:</label>'+
+      '<input type="date" id="rep-from" class="sinput" value="'+monthStart+'" style="max-width:150px;" onchange="renderReportBody()">'+
+      '<label style="font-size:11px;color:var(--muted);">To:</label>'+
+      '<input type="date" id="rep-to" class="sinput" value="'+today+'" style="max-width:150px;" onchange="renderReportBody()">'+
+      '<button class="btn btn-sm btn-outline" onclick="setReportRange(\'week\')">This Week</button>'+
+      '<button class="btn btn-sm btn-outline" onclick="setReportRange(\'month\')">This Month</button>'+
+      '<button class="btn btn-sm btn-outline" onclick="setReportRange(\'all\')">All Time</button>'+
+    '</div>'+
+    '<div id="rep-body"></div>'+
+    '<div class="fe" style="margin-top:16px;">'+
+      '<button class="btn btn-outline" onclick="closeModal()">Close</button>'+
+    '</div>';
+  openModal(html);
+  setTimeout(renderReportBody, 50);
+}
+
+function setReportRange(p){
+  var d = new Date();
+  var to = todayStr();
+  var from = to;
+  if(p==='week'){
+    var dt = new Date(); dt.setDate(dt.getDate()-7);
+    from = dt.toISOString().slice(0,10);
+  } else if(p==='month'){
+    from = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';
+  } else if(p==='all'){
+    from = '2020-01-01';
+  }
+  document.getElementById('rep-from').value = from;
+  document.getElementById('rep-to').value = to;
+  renderReportBody();
+}
+
+function renderReportBody(){
+  var from = document.getElementById('rep-from').value;
+  var to = document.getElementById('rep-to').value;
+  var today = todayStr();
+
+  // Filter tasks by createdAt within range, AND any task completed within range
+  var all = (TASKS||[]).filter(function(t){ return !t.archived; });
+  var inRange = all.filter(function(t){
+    var d = (t.createdAt || t.updatedAt || '').slice(0,10);
+    return d >= from && d <= to;
+  });
+
+  // KPIs
+  var total = inRange.length;
+  var done = inRange.filter(function(t){ return t.stage === 'delivered'; }).length;
+  var open = inRange.filter(function(t){ return t.stage !== 'delivered'; }).length;
+  var overdue = all.filter(function(t){ return t.stage !== 'delivered' && t.dueDate && t.dueDate < today; }).length;
+  var unassigned = all.filter(function(t){ return t.stage !== 'delivered' && !t.assignedTo; }).length;
+  var completion = total ? Math.round(done/total*100) : 0;
+  // On-time delivery (delivered AND updatedAt <= dueDate)
+  var onTime = inRange.filter(function(t){
+    return t.stage === 'delivered' && t.dueDate && t.updatedAt && t.updatedAt <= t.dueDate;
+  }).length;
+  var onTimeRate = done ? Math.round(onTime/done*100) : 0;
+
+  var kpis = [
+    {l:'Total',         v:total,        c:'var(--teal)'},
+    {l:'Completed',     v:done,         c:'var(--success)'},
+    {l:'Completion %',  v:completion+'%', c:completion>=80?'var(--success)':completion>=50?'var(--gold)':'var(--danger)'},
+    {l:'On-Time %',     v:onTimeRate+'%', c:onTimeRate>=80?'var(--success)':'var(--gold)'},
+    {l:'Open',          v:open,         c:'var(--slate)'},
+    {l:'Overdue',       v:overdue,      c:overdue?'var(--danger)':'var(--muted)'},
+    {l:'Unassigned',    v:unassigned,   c:unassigned?'var(--gold)':'var(--muted)'}
+  ];
+
+  // Staff performance
+  var staffMap = {};
+  inRange.forEach(function(t){
+    var who = t.assignedTo || '— Unassigned —';
+    if(!staffMap[who]) staffMap[who] = {assigned:0, done:0, open:0, overdue:0, onTime:0, byCat:{}};
+    staffMap[who].assigned++;
+    var cat = (TASK_TYPES[t.type] && TASK_TYPES[t.type].category) || 'other';
+    staffMap[who].byCat[cat] = (staffMap[who].byCat[cat]||0)+1;
+    if(t.stage === 'delivered'){
+      staffMap[who].done++;
+      if(t.dueDate && t.updatedAt && t.updatedAt <= t.dueDate) staffMap[who].onTime++;
+    } else {
+      staffMap[who].open++;
+      if(t.dueDate && t.dueDate < today) staffMap[who].overdue++;
+    }
+  });
+  var staffArr = Object.keys(staffMap).map(function(name){
+    var s = staffMap[name];
+    return {
+      name:name, assigned:s.assigned, done:s.done, open:s.open, overdue:s.overdue,
+      completionRate: s.assigned ? Math.round(s.done/s.assigned*100) : 0,
+      onTimeRate: s.done ? Math.round(s.onTime/s.done*100) : 0,
+      byCat: s.byCat
+    };
+  }).sort(function(a,b){ return b.done - a.done; });
+
+  // Category breakdown
+  var catMap = {};
+  inRange.forEach(function(t){
+    var cat = (TASK_TYPES[t.type] && TASK_TYPES[t.type].category) || 'other';
+    if(!catMap[cat]) catMap[cat] = {total:0, done:0};
+    catMap[cat].total++;
+    if(t.stage === 'delivered') catMap[cat].done++;
+  });
+  var catLabels = {};
+  TASK_CATEGORIES.forEach(function(c){ catLabels[c.id] = c.icon+' '+c.label; });
+
+  var html =
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:18px;">'+
+    kpis.map(function(k){
+      return '<div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;">'+
+        '<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">'+k.l+'</div>'+
+        '<div style="font-size:18px;font-weight:700;color:'+k.c+';">'+k.v+'</div>'+
+      '</div>';
+    }).join('')+
+    '</div>'+
+
+    '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">👥 Staff Performance</div>'+
+    (staffArr.length ?
+      '<div style="overflow-x:auto;margin-bottom:18px;"><table style="width:100%;border-collapse:collapse;font-size:12px;">'+
+        '<thead><tr style="background:var(--light);"><th style="text-align:left;padding:8px;">Staff</th><th style="padding:8px;">Assigned</th><th style="padding:8px;">Done</th><th style="padding:8px;">Open</th><th style="padding:8px;">Overdue</th><th style="padding:8px;">Completion</th><th style="padding:8px;">On-Time</th></tr></thead>'+
+        '<tbody>'+
+        staffArr.map(function(s){
+          var rc = s.completionRate>=80?'var(--success)':s.completionRate>=50?'var(--gold)':'var(--danger)';
+          var oc = s.onTimeRate>=80?'var(--success)':s.onTimeRate>=50?'var(--gold)':'var(--danger)';
+          return '<tr style="border-top:1px solid var(--border);">'+
+            '<td style="padding:8px;font-weight:600;">'+escHtml(s.name)+'</td>'+
+            '<td style="padding:8px;text-align:center;">'+s.assigned+'</td>'+
+            '<td style="padding:8px;text-align:center;color:var(--success);font-weight:600;">'+s.done+'</td>'+
+            '<td style="padding:8px;text-align:center;">'+s.open+'</td>'+
+            '<td style="padding:8px;text-align:center;color:'+(s.overdue?'var(--danger);font-weight:600':'var(--muted)')+'">'+s.overdue+'</td>'+
+            '<td style="padding:8px;text-align:center;color:'+rc+';font-weight:600;">'+s.completionRate+'%</td>'+
+            '<td style="padding:8px;text-align:center;color:'+oc+';font-weight:600;">'+(s.done?s.onTimeRate+'%':'—')+'</td>'+
+          '</tr>';
+        }).join('')+
+        '</tbody></table></div>'
+      : '<p style="color:var(--muted);font-size:12px;padding:12px;text-align:center;background:var(--light);border-radius:8px;margin-bottom:18px;">No tasks in this range.</p>')+
+
+    '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">📊 By Category</div>'+
+    (Object.keys(catMap).length ?
+      '<div style="margin-bottom:18px;">'+
+      Object.keys(catMap).map(function(c){
+        var d = catMap[c];
+        var pct = d.total ? Math.round(d.done/d.total*100) : 0;
+        return '<div style="margin-bottom:10px;">'+
+          '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">'+
+            '<span><strong>'+(catLabels[c]||c)+'</strong></span>'+
+            '<span style="color:var(--muted);">'+d.done+'/'+d.total+' ('+pct+'%)</span>'+
+          '</div>'+
+          '<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:var(--teal);"></div></div>'+
+        '</div>';
+      }).join('')+
+      '</div>'
+      : '');
+
+  document.getElementById('rep-body').innerHTML = html;
+}
+
 function buildSendSection(t){
   if(!t || !t.driveLink || !t.client) return '';
   var cl = CLIENTS.find(function(c){ return c.fbName===t.client; });
@@ -578,9 +905,34 @@ function openTaskDetail(id){
   });
 
   var typeOpts = '';
+  // Group types by category for cleaner dropdown
+  var byCat = {};
   Object.keys(TASK_TYPES).forEach(function(k){
-    var sel = (t && t.type === k) ? ' selected' : '';
-    typeOpts += '<option value="'+k+'"'+sel+'>'+TASK_TYPES[k].icon+' '+TASK_TYPES[k].label+'</option>';
+    var cat = TASK_TYPES[k].categoryLabel || 'Other';
+    if(!byCat[cat]) byCat[cat] = [];
+    byCat[cat].push({key:k, type:TASK_TYPES[k]});
+  });
+  Object.keys(byCat).forEach(function(catLabel){
+    typeOpts += '<optgroup label="'+escHtml(catLabel)+'">';
+    byCat[catLabel].forEach(function(item){
+      var sel = (t && t.type === item.key) ? ' selected' : '';
+      typeOpts += '<option value="'+item.key+'"'+sel+'>'+item.type.icon+' '+item.type.label+'</option>';
+    });
+    typeOpts += '</optgroup>';
+  });
+
+  // Build staff dropdown from TimeCommand
+  var staffOpts = '<option value="">— Unassigned —</option>';
+  var staffNames = TC_STAFF.map(function(s){ return s.name; });
+  // Also include any assigned names not in TC_STAFF
+  (TASKS||[]).forEach(function(task){
+    if(task.assignedTo && staffNames.indexOf(task.assignedTo)===-1) staffNames.push(task.assignedTo);
+  });
+  if(t && t.assignedTo && staffNames.indexOf(t.assignedTo)===-1) staffNames.push(t.assignedTo);
+  staffNames.sort();
+  staffNames.forEach(function(n){
+    var sel = (t && t.assignedTo === n) ? ' selected' : '';
+    staffOpts += '<option value="'+escHtml(n)+'"'+sel+'>'+escHtml(n)+'</option>';
   });
 
   var stageOpts = '';
@@ -614,7 +966,7 @@ function openTaskDetail(id){
           '<option value="low"'+(t&&t.priority==='low'?' selected':'')+'>Low</option>'+
         '</select></div>'+
       '<div class="field"><label>Assigned To</label>'+
-        '<input type="text" id="td-assigned" class="sinput" value="'+escHtml(t?t.assignedTo||'':'')+'" placeholder="Staff name"></div>'+
+        '<select id="td-assigned" class="sinput">'+staffOpts+'</select></div>'+
     '</div>'+
     '<div class="field"><label>Google Drive Link</label>'+
       '<div style="display:flex;gap:8px;">'+
@@ -820,12 +1172,15 @@ updateClientCount();
 
 var urlEl = document.getElementById('task-url');
 if(urlEl) urlEl.value = getUrl();
+var tcUrlEl = document.getElementById('tc-url');
+if(tcUrlEl) tcUrlEl.value = localStorage.getItem('cl_tc_url') || '';
 
 if(!hasUrl()){
   document.getElementById('settings-panel').style.display = '';
 }
 
 render();
+loadTimeCommandStaff();
 
 // Sync on load
 if(hasUrl()) syncAll();
