@@ -39,6 +39,24 @@ select.sinput{appearance:auto;}
 /* Layout */
 .main{max-width:1200px;margin:0 auto;padding:20px;}
 
+/* ── Sidebar layout ── */
+.app-layout{display:flex;min-height:100vh;}
+.sidebar{width:200px;background:var(--dark,#2f4f4f);color:var(--cream,#f5f0e8);padding:18px 0;display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;transition:transform .2s;}
+.sb-logo{padding:0 16px 18px;border-bottom:1px solid rgba(245,240,232,0.1);display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.sidebar nav{display:flex;flex-direction:column;gap:2px;padding:0 8px;}
+.sb-link{display:flex;align-items:center;gap:12px;padding:11px 14px;background:transparent;border:none;color:rgba(245,240,232,0.75);cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;text-align:left;border-radius:8px;transition:all .15s;position:relative;}
+.sb-link:hover{background:rgba(245,240,232,0.08);color:var(--cream);}
+.sb-link.active{background:var(--teal);color:#fff;}
+.sb-badge{background:var(--gold);color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-left:auto;}
+.sb-burger{display:none;position:fixed;top:14px;left:14px;z-index:200;background:var(--dark);color:var(--cream);border:none;width:42px;height:42px;border-radius:8px;font-size:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.25);}
+.main-area{flex:1;margin-left:200px;padding:20px;max-width:calc(100vw - 200px);}
+@media (max-width:768px){
+  .sidebar{transform:translateX(-100%);width:240px;}
+  .sidebar.open{transform:translateX(0);}
+  .sb-burger{display:block;}
+  .main-area{margin-left:0;padding:64px 14px 20px;max-width:100vw;}
+}
+
 /* View toggles */
 .view-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
 
@@ -91,12 +109,43 @@ select.sinput{appearance:auto;}
     <div class="sub" id="last-sync" style="margin-top:1px;font-size:10px;"></div>
   </div>
   <button class="btn btn-outline" style="color:var(--cream);border-color:rgba(245,240,232,0.3);" onclick="syncAll()">🔄 Sync</button>
-  <button class="btn btn-outline" style="color:var(--cream);border-color:rgba(245,240,232,0.3);" onclick="toggleSettings()">⚙ Settings</button>
 </div>
 
+<!-- App Layout: Sidebar + Main -->
+<div class="app-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-logo">
+      <div style="font-size:24px;">📋</div>
+      <div style="font-size:12px;font-weight:800;color:var(--cream);">CLS Tasks</div>
+    </div>
+    <nav>
+      <button class="sb-link active" data-section="tasks" onclick="switchSection('tasks')">
+        <span style="font-size:18px;">📋</span><span>Tasks</span>
+      </button>
+      <button class="sb-link" data-section="inventory" onclick="switchSection('inventory')">
+        <span style="font-size:18px;">📦</span><span>Inventory</span>
+        <span class="sb-badge" id="sb-inv-badge" style="display:none;"></span>
+      </button>
+      <button class="sb-link" data-section="settings" onclick="switchSection('settings')">
+        <span style="font-size:18px;">⚙</span><span>Settings</span>
+      </button>
+    </nav>
+    <div style="margin-top:auto;padding:14px 12px;border-top:1px solid rgba(245,240,232,0.1);font-size:10px;color:rgba(245,240,232,0.5);">
+      Click Lounge Studio<br>Tasks Manager
+    </div>
+  </aside>
+
+  <!-- Mobile burger button -->
+  <button class="sb-burger" onclick="toggleSidebar()" id="sb-burger">☰</button>
+
+  <main class="main-area">
+
 <!-- Settings -->
-<div class="main">
-  <div id="settings-panel" style="display:none;" class="card">
+<div id="section-settings" style="display:none;">
+  <h2 style="font-size:18px;font-weight:800;margin-bottom:14px;">⚙ Settings</h2>
+  <div class="card">
     <div class="ct">⚙ Connection Settings</div>
     <div class="field">
       <label>Apps Script URL <span style="color:var(--muted);font-weight:400;font-size:11px;">(POS / Tasks)</span></label>
@@ -112,6 +161,10 @@ select.sinput{appearance:auto;}
       <button class="btn btn-teal" onclick="saveSettings()">💾 Save & Sync</button>
     </div>
   </div>
+</div>
+
+<!-- Tasks section (default visible) -->
+<div id="section-tasks">
 
   <!-- Toolbar -->
   <div class="view-tabs">
@@ -177,7 +230,45 @@ select.sinput{appearance:auto;}
   <div id="list-view" style="display:none;">
     <div id="task-list"></div>
   </div>
+</div> <!-- end section-tasks -->
+
+<!-- Inventory section (separate page in sidebar nav) -->
+<div id="section-inventory" style="display:none;">
+  <h2 style="font-size:18px;font-weight:800;margin-bottom:14px;">📦 Monthly Inventory</h2>
+  <div id="inventory-section" style="background:linear-gradient(135deg,rgba(81,137,125,0.10),rgba(81,137,125,0.04));border:1.5px solid rgba(81,137,125,0.25);border-radius:12px;padding:14px 16px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px;">
+      <div style="flex:1;min-width:200px;">
+        <div style="font-size:13px;font-weight:700;color:var(--slate);display:flex;align-items:center;gap:8px;">
+          📦 Monthly Inventory
+          <span id="inv-month-badge" style="background:var(--teal);color:#fff;padding:2px 9px;border-radius:10px;font-size:10px;"></span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;" id="inv-progress-text">Track studio supplies, props, equipment, and consumables</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <select id="inv-checker" onchange="setInventoryChecker(this.value)" style="padding:5px 10px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:#fff;min-width:140px;" title="Who is doing the inventory check?">
+          <option value="">— Who's checking? —</option>
+        </select>
+        <select id="inv-cat-filter" onchange="renderInventory()" style="padding:5px 10px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:#fff;min-width:140px;">
+          <option value="">All categories</option>
+        </select>
+        <select id="inv-status-filter" onchange="renderInventory()" style="padding:5px 10px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:#fff;">
+          <option value="">All status</option>
+          <option value="unchecked">⚪ Not checked yet</option>
+          <option value="__attention__">🔥 Needs attention</option>
+          <option value="ok">✅ All good</option>
+        </select>
+        <button class="btn btn-sm btn-teal" onclick="openNewInventoryItem()">+ New Item</button>
+        <button class="btn btn-sm btn-outline" onclick="createRestockTasks()" title="Auto-create restock tasks for low/out items">🛒 Make Restock Tasks</button>
+        <button class="btn btn-sm btn-outline" onclick="exportInventoryReport()">📥 Export Report</button>
+        <button class="btn btn-sm btn-outline" onclick="resetMonthlyChecks()" title="Start a fresh check for this month">↻ Reset Check</button>
+      </div>
+    </div>
+    <div id="inventory-list"></div>
+  </div>
 </div>
+
+</main>
+</div> <!-- end app-layout -->
 
 <!-- Modal -->
 <div class="modal-ov" id="modal-ov" onclick="if(event.target===this)closeModal()">
@@ -638,9 +729,31 @@ function toggleArchived(){
   render();
 }
 
+function switchSection(name){
+  ['tasks','inventory','settings'].forEach(function(s){
+    var pnl = document.getElementById('section-'+s);
+    if(pnl) pnl.style.display = (s === name) ? '' : 'none';
+  });
+  document.querySelectorAll('.sb-link').forEach(function(el){
+    el.classList.toggle('active', el.dataset.section === name);
+  });
+  if(name === 'inventory'){
+    populateInventoryChecker();
+    renderInventory();
+  }
+  if(name === 'tasks') render();
+  // Close mobile sidebar after selecting
+  var sb = document.getElementById('sidebar');
+  if(sb) sb.classList.remove('open');
+}
+
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+// Legacy alias kept for any old code that referenced toggleSettings
 function toggleSettings(){
-  var el = document.getElementById('settings-panel');
-  el.style.display = el.style.display==='none' ? '' : 'none';
+  switchSection('settings');
 }
 
 function saveSettings(){
@@ -650,7 +763,7 @@ function saveSettings(){
   var tcUrl = (document.getElementById('tc-url').value||'').trim();
   if(tcUrl) localStorage.setItem('cl_tc_url', tcUrl);
   notify('Settings saved ✓','success');
-  document.getElementById('settings-panel').style.display = 'none';
+  switchSection('tasks');
   syncAll();
   loadTimeCommandStaff();
 }
@@ -694,6 +807,7 @@ function render(){
   populateStaffFilter();
   renderStaffLegend();
   renderSendLinkSection();
+  renderInventory();
   if(CUR_VIEW === 'board') renderKanban();
   else renderList();
 }
@@ -887,6 +1001,7 @@ function toggleSendLinkCollapsed(){
   var btn = document.getElementById('sendlink-collapse-btn');
   if(btn) btn.textContent = SENDLINK_COLLAPSED ? '⌄ Expand' : '⌃ Collapse';
   renderSendLinkSection();
+  renderInventory();
 }
 
 function openNewSendLink(){
@@ -898,6 +1013,700 @@ function openNewSendLink(){
     var dueInp = document.getElementById('td-due');
     if(dueInp && !dueInp.value) dueInp.value = todayStr();
   }, 60);
+}
+
+// ── MONTHLY INVENTORY MANAGEMENT ──
+var INV_COLLAPSED = false;
+
+// Default inventory items (used on first load, can be edited/added/removed)
+// itemType determines which statuses are available:
+//   'consumable' = runs out (paper, ink, water, batteries)  → ok/low/out
+//   'durable'    = equipment that can break (cameras, lights, tripods) → working/service/broken
+//   'condition'  = visual items that wear/get damaged (backdrops, props) → good/worn/damaged
+var INV_DEFAULTS = [
+  // Equipment (durable — breaks or needs service)
+  {cat:'equipment',  type:'durable',   name:'Main DSLR Camera',           threshold:1, unit:'pc'},
+  {cat:'equipment',  type:'durable',   name:'Backup Camera',              threshold:1, unit:'pc'},
+  {cat:'equipment',  type:'durable',   name:'Studio Lights',              threshold:2, unit:'pc'},
+  {cat:'equipment',  type:'durable',   name:'Tripods',                    threshold:2, unit:'pc'},
+  {cat:'equipment',  type:'durable',   name:'Light Modifiers/Softboxes',  threshold:2, unit:'pc'},
+  // Storage (durable — fails or fills)
+  {cat:'storage',    type:'durable',   name:'SD Cards (32GB+)',           threshold:5, unit:'pc'},
+  {cat:'storage',    type:'durable',   name:'External Hard Drives',       threshold:1, unit:'pc'},
+  // Printing (consumables)
+  {cat:'printing',   type:'consumable',name:'4R Photo Paper',             threshold:50, unit:'sheets'},
+  {cat:'printing',   type:'consumable',name:'5R Photo Paper',             threshold:30, unit:'sheets'},
+  {cat:'printing',   type:'consumable',name:'Printer Ink (Black)',        threshold:1, unit:'cartridge'},
+  {cat:'printing',   type:'consumable',name:'Printer Ink (Color)',        threshold:1, unit:'set'},
+  {cat:'printing',   type:'consumable',name:'Photo Frames (4R)',          threshold:10, unit:'pc'},
+  {cat:'printing',   type:'consumable',name:'Photo Frames (5R)',          threshold:5, unit:'pc'},
+  // Props & Sets (condition — wear/damage)
+  {cat:'props',      type:'condition', name:'Backdrops (Plain)',          threshold:3, unit:'pc'},
+  {cat:'props',      type:'condition', name:'Backdrops (Themed)',         threshold:2, unit:'pc'},
+  {cat:'props',      type:'durable',   name:'Posing Stools/Chairs',       threshold:2, unit:'pc'},
+  {cat:'props',      type:'condition', name:'Decorative Props',           threshold:5, unit:'pc'},
+  // Cleaning (consumables)
+  {cat:'cleaning',   type:'consumable',name:'Lens Cleaning Solution',     threshold:1, unit:'bottle'},
+  {cat:'cleaning',   type:'consumable',name:'Microfiber Cloths',          threshold:5, unit:'pc'},
+  {cat:'cleaning',   type:'consumable',name:'Studio Cleaning Supplies',   threshold:1, unit:'set'},
+  {cat:'cleaning',   type:'consumable',name:'Trash Bags',                 threshold:10, unit:'pc'},
+  // Client hospitality (consumables)
+  {cat:'hospitality',type:'consumable',name:'Bottled Water',              threshold:12, unit:'bottles'},
+  {cat:'hospitality',type:'consumable',name:'Tissues / Wet Wipes',        threshold:2, unit:'box'},
+  {cat:'hospitality',type:'consumable',name:'Snacks (for kids)',          threshold:1, unit:'pack'},
+  // Office (consumables)
+  {cat:'office',     type:'consumable',name:'Receipt Paper',              threshold:2, unit:'roll'},
+  {cat:'office',     type:'consumable',name:'Business Cards',             threshold:50, unit:'pc'},
+  {cat:'office',     type:'consumable',name:'Packaging Bags/Boxes',       threshold:10, unit:'pc'},
+  // Power (mixed: batteries are consumables, strips are durable)
+  {cat:'power',      type:'consumable',name:'AA Batteries',               threshold:8, unit:'pc'},
+  {cat:'power',      type:'durable',   name:'Camera Battery Spares',      threshold:2, unit:'pc'},
+  {cat:'power',      type:'durable',   name:'Power Strips/Extensions',    threshold:2, unit:'pc'}
+];
+
+// Item types with their relevant statuses
+var INV_ITEM_TYPES = {
+  consumable: {
+    label: '🧴 Consumable',
+    desc: 'Runs out and needs repurchase (paper, ink, water, batteries)',
+    statuses: [
+      {v:'ok',   l:'✅ In Stock',  short:'In Stock', color:'var(--success)', bgColor:'rgba(58,125,92,.15)'},
+      {v:'low',  l:'⚠ Running Low', short:'Low',     color:'var(--gold)',    bgColor:'rgba(215,144,104,.15)'},
+      {v:'out',  l:'❌ Out of Stock', short:'Out',    color:'var(--danger)',  bgColor:'rgba(192,84,74,.15)'}
+    ],
+    actionLabel: '🛒 Repurchase'
+  },
+  durable: {
+    label: '🔧 Equipment',
+    desc: 'Hardware that can break or need service (cameras, lights, drives)',
+    statuses: [
+      {v:'ok',     l:'✅ Working Fine',    short:'Working', color:'var(--success)', bgColor:'rgba(58,125,92,.15)'},
+      {v:'service',l:'🔧 Needs Service',  short:'Service', color:'var(--gold)',    bgColor:'rgba(215,144,104,.15)'},
+      {v:'broken', l:'❌ Broken / Replace', short:'Broken', color:'var(--danger)',  bgColor:'rgba(192,84,74,.15)'}
+    ],
+    actionLabel: '🔧 Fix or Replace'
+  },
+  condition: {
+    label: '🎨 Props / Set',
+    desc: 'Visual items that wear or get damaged (backdrops, props)',
+    statuses: [
+      {v:'ok',      l:'✅ Good Condition', short:'Good',    color:'var(--success)', bgColor:'rgba(58,125,92,.15)'},
+      {v:'worn',    l:'⚠ Worn / Faded',    short:'Worn',    color:'var(--gold)',    bgColor:'rgba(215,144,104,.15)'},
+      {v:'damaged', l:'❌ Damaged / Replace', short:'Damaged', color:'var(--danger)',  bgColor:'rgba(192,84,74,.15)'}
+    ],
+    actionLabel: '🔄 Replace'
+  }
+};
+
+// Helper to get item type config
+function getItemType(item){
+  return INV_ITEM_TYPES[item.itemType || 'consumable'] || INV_ITEM_TYPES.consumable;
+}
+
+// Map status value → category for summary aggregation
+//   "needs attention" status = anything not 'ok'
+function getStatusInfo(item){
+  var t = getItemType(item);
+  return t.statuses.find(function(s){ return s.v === item.status; }) || null;
+}
+
+var INV_CATEGORIES = [
+  {id:'equipment',   label:'📸 Equipment'},
+  {id:'storage',     label:'💾 Storage Media'},
+  {id:'printing',    label:'🖨 Printing Supplies'},
+  {id:'props',       label:'🎨 Props & Sets'},
+  {id:'cleaning',    label:'🧹 Cleaning & Maintenance'},
+  {id:'hospitality', label:'🍽 Client Hospitality'},
+  {id:'office',      label:'📋 Office Supplies'},
+  {id:'power',       label:'🔋 Power & Batteries'},
+  {id:'other',       label:'📦 Other'}
+];
+
+function loadInventory(){
+  try {
+    var stored = localStorage.getItem('cl_inventory');
+    if(stored){
+      INVENTORY = JSON.parse(stored);
+      // Migrate: ensure every item has an itemType (default consumable for old data)
+      var migrated = false;
+      INVENTORY.forEach(function(i){
+        if(!i.itemType){ i.itemType = 'consumable'; migrated = true; }
+      });
+      if(migrated) saveInventory();
+    } else {
+      // First-time setup with defaults
+      INVENTORY = INV_DEFAULTS.map(function(d){
+        return {
+          id: 'inv_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+          name: d.name, category: d.cat, itemType: d.type || 'consumable',
+          threshold: d.threshold, unit: d.unit,
+          currentQty: '', status: '', lastCheckedAt: '', lastCheckedBy: '', notes: '', checkMonth: ''
+        };
+      });
+      saveInventory(); updateInventoryBadge();
+    }
+  } catch(e){
+    INVENTORY = [];
+  }
+}
+
+function saveInventory(){
+  localStorage.setItem('cl_inventory', JSON.stringify(INVENTORY));
+}
+
+var INVENTORY = [];
+
+function currentMonthLabel(){
+  var d = new Date();
+  return d.toLocaleDateString('en-US', {timeZone:'Asia/Manila', month:'long', year:'numeric'});
+}
+
+function currentMonthKey(){
+  var d = new Date();
+  var pht = new Date(d.toLocaleString('en-US',{timeZone:'Asia/Manila'}));
+  return pht.getFullYear()+'-'+String(pht.getMonth()+1).padStart(2,'0');
+}
+
+function getInventoryChecker(){
+  return localStorage.getItem('cl_inv_checker') || '';
+}
+
+function setInventoryChecker(name){
+  if(name) localStorage.setItem('cl_inv_checker', name);
+  else localStorage.removeItem('cl_inv_checker');
+  notify(name ? '✓ Inventory checks will be logged under "'+name+'"' : 'Checker cleared', 'info');
+  renderInventory();
+}
+
+function populateInventoryChecker(){
+  var sel = document.getElementById('inv-checker');
+  if(!sel) return;
+  var current = getInventoryChecker();
+  // Pull TimeCommand staff if loaded
+  var staff = (window.TC_STAFF || []).map(function(s){ return s.name; });
+  if(!staff.length){
+    // Fallback to any task assignees
+    var assignees = [...new Set((TASKS||[]).map(function(t){ return t.assignedTo; }).filter(Boolean))];
+    staff = assignees;
+  }
+  // Also include the saved checker if not in list (custom entry)
+  if(current && staff.indexOf(current) === -1) staff.push(current);
+  staff.sort();
+  sel.innerHTML = '<option value="">— Who\'s checking? —</option>' +
+    staff.map(function(n){
+      var sc = (typeof staffColor === 'function') ? staffColor(n) : null;
+      var bg = sc ? sc.bg : '';
+      return '<option value="'+escHtml(n)+'"'+(n===current?' selected':'')+(bg?' style="background:'+bg+';color:#fff;"':'')+'>'+escHtml(n)+'</option>';
+    }).join('') +
+    '<option value="__custom__">+ Add a custom name…</option>';
+  // Visual highlight when checker is selected
+  if(current){
+    var sc = (typeof staffColor === 'function') ? staffColor(current) : null;
+    if(sc){
+      sel.style.background = sc.bg;
+      sel.style.color = sc.fg;
+      sel.style.fontWeight = '600';
+    }
+  } else {
+    sel.style.background = '#fff';
+    sel.style.color = '';
+    sel.style.fontWeight = '';
+  }
+  // Handle "+ Add custom"
+  sel.onchange = function(){
+    if(sel.value === '__custom__'){
+      var nm = prompt('Enter the name of who is doing the inventory check:');
+      if(nm && nm.trim()){
+        setInventoryChecker(nm.trim());
+        populateInventoryChecker();
+      } else {
+        sel.value = current;
+      }
+    } else {
+      setInventoryChecker(sel.value);
+      populateInventoryChecker();
+    }
+  };
+}
+
+// Create restock tasks for low/out items
+function createRestockTasks(){
+  var monthKey = currentMonthKey();
+  var needsRestock = INVENTORY.filter(function(i){
+    return i.checkMonth === monthKey && (i.status === 'low' || i.status === 'out');
+  });
+  if(!needsRestock.length){
+    notify('No low or out items this month to create tasks for', 'info');
+    return;
+  }
+  if(!confirm('Create '+needsRestock.length+' restock task(s) in the Tasks board? They\'ll appear under "Studio Operations → Restock Supplies".')) return;
+  var checker = getInventoryChecker() || '';
+  var created = 0;
+  needsRestock.forEach(function(item){
+    // Don't create duplicates — check if a restock task for this item already exists this month
+    var existing = (TASKS||[]).find(function(t){
+      return t.type === 'restock' && (t.title||'').indexOf(item.name) > -1 && !t.archived && t.stage !== 'delivered';
+    });
+    if(existing) return;
+    var t = {
+      id: uid(),
+      title: 'Restock: '+item.name,
+      client: '',
+      type: 'restock',
+      stage: 'new',
+      dueDate: '',
+      priority: item.status === 'out' ? 'high' : 'normal',
+      assignedTo: checker,
+      driveLink: '',
+      notes: 'Auto-created from monthly inventory.\nStatus: '+(item.status === 'out' ? 'OUT OF STOCK' : 'LOW STOCK')+'\nCategory: '+item.category+'\nCurrent qty: '+(item.currentQty||'?')+' '+(item.unit||'')+'\nRestock threshold: '+item.threshold+' '+(item.unit||'')+(item.notes?'\nItem notes: '+item.notes:''),
+      createdAt: nowTs(),
+      updatedAt: nowTs(),
+      completedAt: '',
+      archived: false,
+      due: ''
+    };
+    TASKS.push(t);
+    pushTask(t, true);
+    created++;
+  });
+  notify('✓ Created '+created+' restock task(s) in Tasks board', 'success');
+  if(created < needsRestock.length){
+    setTimeout(function(){
+      notify('Note: '+(needsRestock.length - created)+' item(s) already had open restock tasks', 'info');
+    }, 1500);
+  }
+}
+
+// Export inventory as a CSV file
+function exportInventoryReport(){
+  var monthKey = currentMonthKey();
+  var monthLabel = currentMonthLabel();
+  var headers = ['Category','Item Name','Current Qty','Unit','Threshold','Status','Last Checked','Checked By','Notes'];
+  var rows = [headers];
+  INV_CATEGORIES.forEach(function(cat){
+    INVENTORY.filter(function(i){ return i.category === cat.id; }).forEach(function(i){
+      rows.push([
+        cat.label.replace(/^[^\s]+ /, ''),
+        i.name,
+        i.checkMonth === monthKey ? (i.currentQty || '') : 'Not checked',
+        i.unit || '',
+        i.threshold || '',
+        i.checkMonth === monthKey ? (i.status === 'ok' ? 'In Stock' : i.status === 'low' ? 'LOW' : i.status === 'out' ? 'OUT' : '') : '',
+        i.lastCheckedAt || '',
+        i.lastCheckedBy || '',
+        i.notes || ''
+      ]);
+    });
+  });
+  var csv = rows.map(function(row){
+    return row.map(function(cell){
+      var s = String(cell || '').replace(/"/g,'""');
+      return /[,"\n]/.test(s) ? '"'+s+'"' : s;
+    }).join(',');
+  }).join('\n');
+  // Add summary at top
+  var checker = getInventoryChecker() || '—';
+  var summary = 'Inventory Report - '+monthLabel+'\nChecked by: '+checker+'\nGenerated: '+(new Date()).toLocaleString('en-PH',{timeZone:'Asia/Manila'})+'\n\n';
+  csv = summary + csv;
+
+  var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'inventory_'+monthKey+'.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  notify('📥 Inventory CSV downloaded', 'success');
+}
+
+// Update the sidebar badge count for low/out items
+function updateInventoryBadge(){
+  var monthKey = currentMonthKey();
+  // Count anything checked this month that is NOT 'ok' (any kind of attention needed)
+  var alertCount = INVENTORY.filter(function(i){
+    return i.checkMonth === monthKey && i.status && i.status !== 'ok';
+  }).length;
+  var badge = document.getElementById('sb-inv-badge');
+  if(badge){
+    if(alertCount > 0){
+      badge.style.display = '';
+      badge.textContent = alertCount;
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+}
+
+function renderInventory(){
+  if(!INVENTORY || !INVENTORY.length) loadInventory();
+  var section = document.getElementById('inventory-section');
+  var listEl = document.getElementById('inventory-list');
+  if(!section || !listEl) return;
+
+  // Populate category filter
+  var catSel = document.getElementById('inv-cat-filter');
+  if(catSel){
+    var cur = catSel.value;
+    catSel.innerHTML = '<option value="">All categories</option>' +
+      INV_CATEGORIES.map(function(c){ return '<option value="'+c.id+'">'+c.label+'</option>'; }).join('');
+    catSel.value = cur;
+  }
+
+  var monthLabel = currentMonthLabel();
+  var monthKey = currentMonthKey();
+  var checkedThisMonth = INVENTORY.filter(function(i){ return i.checkMonth === monthKey; }).length;
+  var total = INVENTORY.length;
+  document.getElementById('inv-month-badge').textContent = monthLabel + ' · ' + checkedThisMonth + '/' + total;
+  document.getElementById('inv-progress-text').innerHTML = checkedThisMonth === total
+    ? '✅ All ' + total + ' items checked for ' + monthLabel
+    : checkedThisMonth + ' of ' + total + ' items checked this month';
+
+  if(INV_COLLAPSED){ listEl.innerHTML = ''; return; }
+
+  // ── SUMMARY CARD: What needs attention ──
+  // Group items needing action by item type
+  var repurchaseItems = INVENTORY.filter(function(i){
+    return i.itemType === 'consumable' && i.checkMonth === monthKey && (i.status === 'low' || i.status === 'out');
+  });
+  var fixItems = INVENTORY.filter(function(i){
+    return i.itemType === 'durable' && i.checkMonth === monthKey && (i.status === 'service' || i.status === 'broken');
+  });
+  var replaceItems = INVENTORY.filter(function(i){
+    return i.itemType === 'condition' && i.checkMonth === monthKey && (i.status === 'worn' || i.status === 'damaged');
+  });
+  var allGoodCount = INVENTORY.filter(function(i){ return i.checkMonth === monthKey && i.status === 'ok'; }).length;
+  var totalNeedsAction = repurchaseItems.length + fixItems.length + replaceItems.length;
+
+  var summaryHtml = '';
+  if(checkedThisMonth > 0){
+    summaryHtml = '<div style="background:#fff;border-radius:10px;padding:12px;margin-bottom:14px;border:1px solid var(--border);">'+
+      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:10px;">📊 Summary — '+monthLabel+'</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">'+
+        // Repurchase consumables
+        '<div style="background:rgba(215,144,104,.06);border-left:3px solid var(--gold);padding:10px;border-radius:8px;cursor:pointer;" onclick="filterSummary(\'repurchase\')">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+            '<div style="font-size:11px;font-weight:700;color:var(--gold);">🛒 REPURCHASE</div>'+
+            '<div style="font-size:18px;font-weight:800;color:var(--gold);">'+repurchaseItems.length+'</div>'+
+          '</div>'+
+          '<div style="font-size:10px;color:var(--muted);margin-top:4px;">'+
+            (repurchaseItems.length ? repurchaseItems.slice(0,3).map(function(i){return escHtml(i.name);}).join(', ')+(repurchaseItems.length>3?' +'+(repurchaseItems.length-3)+' more':'') : 'All consumables in stock ✓')+
+          '</div>'+
+        '</div>'+
+        // Fix/service equipment
+        '<div style="background:rgba(91,123,181,.06);border-left:3px solid #5b7bb5;padding:10px;border-radius:8px;cursor:pointer;" onclick="filterSummary(\'fix\')">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+            '<div style="font-size:11px;font-weight:700;color:#5b7bb5;">🔧 FIX / REPLACE</div>'+
+            '<div style="font-size:18px;font-weight:800;color:#5b7bb5;">'+fixItems.length+'</div>'+
+          '</div>'+
+          '<div style="font-size:10px;color:var(--muted);margin-top:4px;">'+
+            (fixItems.length ? fixItems.slice(0,3).map(function(i){return escHtml(i.name);}).join(', ')+(fixItems.length>3?' +'+(fixItems.length-3)+' more':'') : 'All equipment working ✓')+
+          '</div>'+
+        '</div>'+
+        // Worn/damaged props
+        '<div style="background:rgba(164,91,168,.06);border-left:3px solid #a45ba8;padding:10px;border-radius:8px;cursor:pointer;" onclick="filterSummary(\'replace\')">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+            '<div style="font-size:11px;font-weight:700;color:#a45ba8;">🔄 REPLACE PROPS</div>'+
+            '<div style="font-size:18px;font-weight:800;color:#a45ba8;">'+replaceItems.length+'</div>'+
+          '</div>'+
+          '<div style="font-size:10px;color:var(--muted);margin-top:4px;">'+
+            (replaceItems.length ? replaceItems.slice(0,3).map(function(i){return escHtml(i.name);}).join(', ')+(replaceItems.length>3?' +'+(replaceItems.length-3)+' more':'') : 'All props in good condition ✓')+
+          '</div>'+
+        '</div>'+
+        // All good
+        '<div style="background:rgba(58,125,92,.06);border-left:3px solid var(--success);padding:10px;border-radius:8px;cursor:pointer;" onclick="filterSummary(\'allgood\')">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+            '<div style="font-size:11px;font-weight:700;color:var(--success);">✅ ALL GOOD</div>'+
+            '<div style="font-size:18px;font-weight:800;color:var(--success);">'+allGoodCount+'</div>'+
+          '</div>'+
+          '<div style="font-size:10px;color:var(--muted);margin-top:4px;">Items in good condition</div>'+
+        '</div>'+
+      '</div>'+
+      (totalNeedsAction>0 ? '<div style="margin-top:10px;font-size:11px;color:var(--slate);">'+
+        '<strong>'+totalNeedsAction+'</strong> item'+(totalNeedsAction!==1?'s':'')+' need attention. '+
+        '<a onclick="filterSummary(\'all-attention\')" style="color:var(--teal);cursor:pointer;text-decoration:underline;">View all →</a>'+
+      '</div>' : '')+
+    '</div>';
+  }
+
+  // Filters
+  var catFilter = (document.getElementById('inv-cat-filter')||{}).value || '';
+  var statusFilter = (document.getElementById('inv-status-filter')||{}).value || '';
+
+  var items = INVENTORY.slice();
+  if(catFilter) items = items.filter(function(i){ return i.category === catFilter; });
+  if(statusFilter){
+    if(statusFilter === 'unchecked'){
+      items = items.filter(function(i){ return i.checkMonth !== monthKey; });
+    } else if(statusFilter === '__attention__'){
+      items = items.filter(function(i){
+        if(i.checkMonth !== monthKey) return false;
+        return i.status && i.status !== 'ok';
+      });
+    } else {
+      items = items.filter(function(i){ return i.status === statusFilter && i.checkMonth === monthKey; });
+    }
+  }
+
+  if(!items.length){
+    listEl.innerHTML = summaryHtml + '<div style="color:var(--muted);font-size:12px;padding:14px;text-align:center;background:#fff;border-radius:8px;">No items match this filter. Click <strong>+ New Item</strong> to add one.</div>';
+    return;
+  }
+
+  // Group by category
+  var grouped = {};
+  items.forEach(function(i){
+    var c = i.category || 'other';
+    if(!grouped[c]) grouped[c] = [];
+    grouped[c].push(i);
+  });
+
+  var html = summaryHtml;
+  INV_CATEGORIES.forEach(function(cat){
+    if(!grouped[cat.id]) return;
+    html += '<div style="margin-bottom:10px;">'+
+      '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;padding-left:4px;">'+cat.label+' · '+grouped[cat.id].length+' items</div>';
+    grouped[cat.id].forEach(function(item){
+      var typeConfig = getItemType(item);
+      var checked = item.checkMonth === monthKey;
+      var statusInfo = checked ? getStatusInfo(item) : null;
+      var statusBadge;
+      var stripeColor = '#d0d0d0';
+      if(!checked){
+        statusBadge = '<span style="background:#e8edee;color:var(--muted);padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600;">⚪ Not checked</span>';
+        stripeColor = 'var(--muted)';
+      } else if(statusInfo){
+        statusBadge = '<span style="background:'+statusInfo.bgColor+';color:'+statusInfo.color+';padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">'+statusInfo.l+'</span>';
+        stripeColor = statusInfo.color;
+      } else {
+        statusBadge = '<span style="background:#e8edee;color:var(--muted);padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600;">No status</span>';
+      }
+
+      // Per-type quick action buttons (3 buttons with type-appropriate labels)
+      var quickBtns = typeConfig.statuses.map(function(s){
+        var label = s.v === 'ok' ? '✅' : (s.v === 'low' || s.v === 'service' || s.v === 'worn') ? '⚠' : '❌';
+        var title = s.l.replace(/^[^\s]+ /, ''); // strip leading emoji from tooltip
+        return '<button onclick="quickCheckItem(\''+item.id+'\',\''+s.v+'\')" class="btn btn-sm" title="'+title+'" style="padding:3px 8px;font-size:11px;">'+label+'</button>';
+      }).join('');
+
+      // Item type indicator
+      var typeIcon = item.itemType === 'durable' ? '🔧' : item.itemType === 'condition' ? '🎨' : '🧴';
+
+      html += '<div onclick="openInventoryItem(\''+item.id+'\')" style="background:#fff;border:1px solid var(--border);border-left:3px solid '+stripeColor+';border-radius:8px;padding:9px 12px;margin-bottom:5px;display:flex;align-items:center;gap:10px;cursor:pointer;">'+
+        '<div style="font-size:14px;flex-shrink:0;" title="'+typeConfig.label+'">'+typeIcon+'</div>'+
+        '<div style="flex:1;min-width:0;">'+
+          '<div style="font-size:12px;font-weight:600;color:var(--slate);">'+escHtml(item.name)+'</div>'+
+          '<div style="font-size:10px;color:var(--muted);margin-top:1px;">'+
+            (checked && item.currentQty !== '' ? 'Qty: <strong>'+escHtml(String(item.currentQty))+' '+escHtml(item.unit||'')+'</strong>' : (item.itemType==='consumable' ? 'Threshold: '+item.threshold+' '+(item.unit||'') : typeConfig.label))+
+            (item.lastCheckedAt ? ' · Last: '+escHtml(item.lastCheckedAt)+(item.lastCheckedBy?' ('+escHtml(item.lastCheckedBy)+')':'') : '')+
+          '</div>'+
+        '</div>'+
+        statusBadge+
+        '<div style="display:flex;gap:4px;flex-shrink:0;" onclick="event.stopPropagation()">'+
+          quickBtns+
+        '</div>'+
+      '</div>';
+    });
+    html += '</div>';
+  });
+
+  listEl.innerHTML = html;
+}
+
+// Click on summary card → filter list to those items
+function filterSummary(which){
+  var catSel = document.getElementById('inv-cat-filter');
+  var statusSel = document.getElementById('inv-status-filter');
+  if(catSel) catSel.value = '';
+  if(statusSel){
+    if(which === 'repurchase'){
+      // Show low + out — need to set type filter; for now use __attention__ which covers anything not ok
+      statusSel.value = '__attention__';
+    } else if(which === 'fix' || which === 'replace' || which === 'all-attention'){
+      statusSel.value = '__attention__';
+    } else if(which === 'allgood'){
+      statusSel.value = 'ok';
+    }
+  }
+  // If a summary card was clicked for specific type, narrow further by category isn't ideal
+  // Instead just show all that need attention
+  renderInventory();
+  // Scroll to list
+  document.getElementById('inventory-list').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function quickCheckItem(id, status){
+  var item = INVENTORY.find(function(i){ return i.id === id; });
+  if(!item) return;
+  if(!getInventoryChecker()){
+    notify('⚠ Please pick who\'s doing the check first (top dropdown)', 'error');
+    return;
+  }
+  item.status = status;
+  item.checkMonth = currentMonthKey();
+  item.lastCheckedAt = todayStr();
+  item.lastCheckedBy = getInventoryChecker();
+  saveInventory(); updateInventoryBadge();
+  renderInventory();
+  // Use type-aware label
+  var typeConfig = getItemType(item);
+  var statusObj = typeConfig.statuses.find(function(s){ return s.v === status; });
+  var label = statusObj ? statusObj.l : status;
+  notify(escHtml(item.name)+': '+label, 'success');
+}
+
+function openInventoryItem(id){
+  var item = INVENTORY.find(function(i){ return i.id === id; });
+  if(!item) return;
+  var catOpts = INV_CATEGORIES.map(function(c){
+    return '<option value="'+c.id+'"'+(c.id===item.category?' selected':'')+'>'+c.label+'</option>';
+  }).join('');
+  // Item type options
+  var typeOpts = Object.keys(INV_ITEM_TYPES).map(function(k){
+    var t = INV_ITEM_TYPES[k];
+    return '<option value="'+k+'"'+(k===(item.itemType||'consumable')?' selected':'')+'>'+t.label+' — '+t.desc+'</option>';
+  }).join('');
+  // Status options vary by item type
+  var typeConfig = getItemType(item);
+  var statusOpts = '<option value="">— Not checked yet —</option>' +
+    typeConfig.statuses.map(function(s){
+      return '<option value="'+s.v+'"'+(s.v===item.status?' selected':'')+'>'+s.l+'</option>';
+    }).join('');
+  // Quantity field only relevant for consumables
+  var showQty = (item.itemType || 'consumable') === 'consumable';
+  var html =
+    '<h3 style="margin-bottom:6px;">📦 '+escHtml(item.name||'New Item')+'</h3>'+
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Update this item\'s details and status for '+currentMonthLabel()+'</div>'+
+    '<div class="grid">'+
+      '<div class="field" style="grid-column:1/-1;"><label>Item Name <span style="color:var(--danger);">*</span></label>'+
+        '<input type="text" id="inv-name" class="sinput" value="'+escHtml(item.name)+'" placeholder="What is this item?"></div>'+
+      '<div class="field"><label>Category</label>'+
+        '<select id="inv-cat" class="sinput">'+catOpts+'</select></div>'+
+      '<div class="field"><label>Item Type</label>'+
+        '<select id="inv-itemtype" class="sinput" onchange="onItemTypeChange()">'+typeOpts+'</select>'+
+        '<div style="font-size:10px;color:var(--muted);margin-top:3px;">Determines what statuses are available</div></div>'+
+      '<div class="field" id="inv-qty-field" style="'+(showQty?'':'display:none;')+'"><label>Current Quantity</label>'+
+        '<input type="text" id="inv-qty" class="sinput" value="'+escHtml(String(item.currentQty||''))+'" placeholder="e.g. 5"></div>'+
+      '<div class="field" id="inv-unit-field" style="'+(showQty?'':'display:none;')+'"><label>Unit</label>'+
+        '<input type="text" id="inv-unit" class="sinput" value="'+escHtml(item.unit||'')+'" placeholder="pc, box, sheet"></div>'+
+      '<div class="field" id="inv-threshold-field" style="'+(showQty?'':'display:none;')+';grid-column:1/-1;"><label>Restock Threshold</label>'+
+        '<input type="number" id="inv-threshold" class="sinput" value="'+escHtml(String(item.threshold||''))+'" placeholder="Below this = low">'+
+        '<div style="font-size:10px;color:var(--muted);margin-top:3px;">Auto-suggest "Low" when current qty falls below this</div></div>'+
+      '<div class="field" style="grid-column:1/-1;"><label>Status</label>'+
+        '<select id="inv-status" class="sinput">'+statusOpts+'</select></div>'+
+      '<div class="field" style="grid-column:1/-1;"><label>Notes / Supplier / Location</label>'+
+        '<textarea id="inv-notes" class="sinput" rows="2" placeholder="Brand preference, supplier name + phone, location in studio…">'+escHtml(item.notes||'')+'</textarea></div>'+
+      '<div class="field" style="grid-column:1/-1;"><label>Last Checked By</label>'+
+        '<input type="text" id="inv-by" class="sinput" value="'+escHtml(item.lastCheckedBy || getInventoryChecker() || '')+'" placeholder="Who is doing this check?"></div>'+
+    '</div>'+
+    '<div class="fe" style="margin-top:14px;justify-content:space-between;flex-wrap:wrap;gap:8px;">'+
+      '<button class="btn btn-d btn-sm" onclick="deleteInventoryItem(\''+item.id+'\')">🗑 Delete Item</button>'+
+      '<div style="display:flex;gap:6px;">'+
+        '<button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
+        '<button class="btn btn-teal" onclick="saveInventoryItem(\''+item.id+'\')">💾 Save Item</button>'+
+      '</div>'+
+    '</div>';
+  openModal(html);
+}
+
+// When item type changes in modal, update visible fields and status options
+function onItemTypeChange(){
+  var typeKey = document.getElementById('inv-itemtype').value;
+  var typeConfig = INV_ITEM_TYPES[typeKey] || INV_ITEM_TYPES.consumable;
+  // Show qty/unit/threshold only for consumables
+  var isConsumable = typeKey === 'consumable';
+  ['inv-qty-field','inv-unit-field','inv-threshold-field'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = isConsumable ? '' : 'none';
+  });
+  // Update status dropdown options
+  var statusSel = document.getElementById('inv-status');
+  if(statusSel){
+    var currentVal = statusSel.value;
+    statusSel.innerHTML = '<option value="">— Not checked yet —</option>' +
+      typeConfig.statuses.map(function(s){
+        return '<option value="'+s.v+'"'+(s.v===currentVal?' selected':'')+'>'+s.l+'</option>';
+      }).join('');
+  }
+}
+
+function openNewInventoryItem(){
+  var newItem = {
+    id: 'inv_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    name: '', category: 'other', currentQty: '', threshold: 1, unit: 'pc',
+    status: '', lastCheckedAt: '', lastCheckedBy: '', notes: '', checkMonth: ''
+  };
+  INVENTORY.push(newItem);
+  saveInventory(); updateInventoryBadge();
+  openInventoryItem(newItem.id);
+}
+
+function saveInventoryItem(id){
+  var item = INVENTORY.find(function(i){ return i.id === id; });
+  if(!item) return;
+  var name = (document.getElementById('inv-name').value||'').trim();
+  if(!name){ notify('Item name is required','error'); return; }
+  item.name = name;
+  item.category = document.getElementById('inv-cat').value || 'other';
+  item.itemType = document.getElementById('inv-itemtype').value || 'consumable';
+  // Quantity fields only matter for consumables
+  if(item.itemType === 'consumable'){
+    item.currentQty = (document.getElementById('inv-qty').value||'').trim();
+    item.unit = (document.getElementById('inv-unit').value||'').trim();
+    item.threshold = parseFloat(document.getElementById('inv-threshold').value)||1;
+  }
+  var newStatus = document.getElementById('inv-status').value;
+  // Auto-suggest status for consumables based on qty vs threshold
+  if(item.itemType === 'consumable' && !newStatus && item.currentQty !== ''){
+    var qNum = parseFloat(item.currentQty);
+    if(!isNaN(qNum)){
+      if(qNum === 0) newStatus = 'out';
+      else if(qNum < item.threshold) newStatus = 'low';
+      else newStatus = 'ok';
+    }
+  }
+  item.status = newStatus;
+  item.notes = (document.getElementById('inv-notes').value||'').trim();
+  item.lastCheckedBy = (document.getElementById('inv-by').value||'').trim() || getInventoryChecker() || 'Admin';
+  if(newStatus){
+    item.lastCheckedAt = todayStr();
+    item.checkMonth = currentMonthKey();
+  }
+  saveInventory(); updateInventoryBadge();
+  closeModal();
+  renderInventory();
+  notify('✓ '+name+' saved','success');
+}
+
+function deleteInventoryItem(id){
+  if(!confirm('Permanently delete this inventory item?')) return;
+  INVENTORY = INVENTORY.filter(function(i){ return i.id !== id; });
+  saveInventory(); updateInventoryBadge();
+  closeModal();
+  renderInventory();
+  notify('🗑 Item deleted','info');
+}
+
+function resetMonthlyChecks(){
+  if(!confirm('Reset all check statuses for this month? This will clear "checked" marks but keep the items themselves.')) return;
+  var monthKey = currentMonthKey();
+  INVENTORY.forEach(function(i){
+    if(i.checkMonth === monthKey){
+      i.checkMonth = '';
+      i.status = '';
+    }
+  });
+  saveInventory(); updateInventoryBadge();
+  renderInventory();
+  notify('↻ Monthly checks reset','info');
+}
+
+function toggleInventoryCollapsed(){
+  INV_COLLAPSED = !INV_COLLAPSED;
+  var btn = document.getElementById('inv-collapse-btn');
+  if(btn) btn.textContent = INV_COLLAPSED ? '⌄ Expand' : '⌃ Collapse';
+  renderInventory();
 }
 
 // Color picker modal — admin can override auto-assigned colors per staff
@@ -1635,6 +2444,8 @@ function updateLastSync(){
 // ================================================================
 loadTasks();
 loadClients();
+loadInventory();
+updateInventoryBadge();
 updateClientCount();
 
 var urlEl = document.getElementById('task-url');
@@ -1643,7 +2454,7 @@ var tcUrlEl = document.getElementById('tc-url');
 if(tcUrlEl) tcUrlEl.value = localStorage.getItem('cl_tc_url') || '';
 
 if(!hasUrl()){
-  document.getElementById('settings-panel').style.display = '';
+  switchSection('settings');
 }
 
 render();
