@@ -47,6 +47,10 @@ select.sinput{appearance:auto;}
 .sb-link{display:flex;align-items:center;gap:12px;padding:11px 14px;background:transparent;border:none;color:rgba(245,240,232,0.75);cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;text-align:left;border-radius:8px;transition:all .15s;position:relative;}
 .sb-link:hover{background:rgba(245,240,232,0.08);color:var(--cream);}
 .sb-link.active{background:var(--teal);color:#fff;}
+.inv-handle{transition:color .15s;}
+.inv-handle:hover{color:var(--teal) !important;cursor:grab;}
+.inv-handle:active{cursor:grabbing;}
+[data-inv-id]{transition:transform .15s, box-shadow .15s, opacity .15s;}
 .sb-badge{background:var(--gold);color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-left:auto;}
 .sb-burger{display:none;position:fixed;top:14px;left:14px;z-index:200;background:var(--dark);color:var(--cream);border:none;width:42px;height:42px;border-radius:8px;font-size:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.25);}
 .main-area{flex:1;margin-left:200px;padding:20px;max-width:calc(100vw - 200px);}
@@ -1255,7 +1259,8 @@ function pushInventoryItem(item){
     currentQty: item.currentQty || '',
     lastCheckedAt: item.lastCheckedAt || '',
     lastCheckedBy: item.lastCheckedBy || '',
-    checkMonth: item.checkMonth || ''
+    checkMonth: item.checkMonth || '',
+    sortOrder: item.sortOrder !== undefined ? item.sortOrder : ''
   });
 }
 
@@ -1306,7 +1311,8 @@ async function syncInventoryFromGas(){
           unit: s.unit, threshold: s.threshold, notes: s.notes,
           status: s.status, currentQty: s.currentQty,
           lastCheckedAt: s.lastCheckedAt, lastCheckedBy: s.lastCheckedBy,
-          checkMonth: s.checkMonth
+          checkMonth: s.checkMonth,
+          sortOrder: s.sortOrder !== undefined && s.sortOrder !== '' ? parseFloat(s.sortOrder) : undefined
         };
         // If local has a more recent check and is queued, prefer local
         if(local && local.lastCheckedAt && (!s.lastCheckedAt || String(local.lastCheckedAt) > String(s.lastCheckedAt))){
@@ -1663,13 +1669,25 @@ function renderInventory(){
     if(!grouped[c]) grouped[c] = [];
     grouped[c].push(i);
   });
+  // Sort each category by sortOrder (ascending; items without sortOrder go to end)
+  Object.keys(grouped).forEach(function(c){
+    grouped[c].sort(function(a, b){
+      var ao = (a.sortOrder === undefined || a.sortOrder === '') ? 999999 : parseFloat(a.sortOrder);
+      var bo = (b.sortOrder === undefined || b.sortOrder === '') ? 999999 : parseFloat(b.sortOrder);
+      if(ao === bo) return (a.name||'').localeCompare(b.name||'');
+      return ao - bo;
+    });
+  });
 
   var html = summaryHtml;
   INV_CATEGORIES.forEach(function(cat){
     if(!grouped[cat.id]) return;
-    html += '<div style="margin-bottom:10px;">'+
-      '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;padding-left:4px;">'+cat.label+' · '+grouped[cat.id].length+' items</div>';
-    grouped[cat.id].forEach(function(item){
+    html += '<div style="margin-bottom:10px;" data-cat="'+cat.id+'">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding-left:4px;">'+
+        '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;">'+cat.label+' · '+grouped[cat.id].length+' items</div>'+
+        '<div style="font-size:9px;color:var(--muted);font-style:italic;">↕ Drag handle or use ▲▼ to reorder</div>'+
+      '</div>';
+    grouped[cat.id].forEach(function(item, idx){
       var typeConfig = getItemType(item);
       var checked = item.checkMonth === monthKey;
       var statusInfo = checked ? getStatusInfo(item) : null;
@@ -1688,17 +1706,33 @@ function renderInventory(){
       // Per-type quick action buttons (3 buttons with type-appropriate labels)
       var quickBtns = typeConfig.statuses.map(function(s){
         var label = s.v === 'ok' ? '✅' : (s.v === 'low' || s.v === 'service' || s.v === 'worn') ? '⚠' : '❌';
-        var title = s.l.replace(/^[^\s]+ /, ''); // strip leading emoji from tooltip
+        var title = s.l.replace(/^[^\s]+ /, '');
         return '<button onclick="quickCheckItem(\''+item.id+'\',\''+s.v+'\')" class="btn btn-sm" title="'+title+'" style="padding:3px 8px;font-size:11px;">'+label+'</button>';
       }).join('');
 
-      // Item type indicator
       var typeIcon = item.itemType === 'durable' ? '🔧' : item.itemType === 'condition' ? '🎨' : '🧴';
+      var isFirst = idx === 0;
+      var isLast = idx === grouped[cat.id].length - 1;
+      var priorityBadge = idx < 3 ? '<span style="background:rgba(81,137,125,.12);color:var(--teal);font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;margin-right:4px;">#'+(idx+1)+'</span>' : '';
 
-      html += '<div onclick="openInventoryItem(\''+item.id+'\')" style="background:#fff;border:1px solid var(--border);border-left:3px solid '+stripeColor+';border-radius:8px;padding:9px 12px;margin-bottom:5px;display:flex;align-items:center;gap:10px;cursor:pointer;">'+
+      html += '<div draggable="true" '+
+        'ondragstart="invDragStart(event,\''+item.id+'\')" '+
+        'ondragover="invDragOver(event,\''+item.id+'\')" '+
+        'ondragleave="invDragLeave(event,this)" '+
+        'ondrop="invDrop(event,\''+item.id+'\')" '+
+        'ondragend="invDragEnd(event)" '+
+        'data-inv-id="'+item.id+'" data-cat="'+cat.id+'" '+
+        'style="background:#fff;border:1px solid var(--border);border-left:3px solid '+stripeColor+';border-radius:8px;padding:9px 12px;margin-bottom:5px;display:flex;align-items:center;gap:8px;transition:transform .15s, box-shadow .15s;">'+
+        // Drag handle
+        '<div class="inv-handle" title="Drag to reorder" style="cursor:grab;color:var(--muted);font-size:14px;flex-shrink:0;padding:0 2px;user-select:none;line-height:1;">⋮⋮</div>'+
+        // Up/down arrows (touch-friendly)
+        '<div style="display:flex;flex-direction:column;gap:0;flex-shrink:0;" onclick="event.stopPropagation()">'+
+          '<button onclick="moveInventoryItem(\''+item.id+'\',-1)" '+(isFirst?'disabled':'')+' style="background:none;border:none;cursor:'+(isFirst?'not-allowed':'pointer')+';padding:0;font-size:11px;line-height:1;color:'+(isFirst?'#ccc':'var(--slate)')+';" title="Move up">▲</button>'+
+          '<button onclick="moveInventoryItem(\''+item.id+'\',1)" '+(isLast?'disabled':'')+' style="background:none;border:none;cursor:'+(isLast?'not-allowed':'pointer')+';padding:0;font-size:11px;line-height:1;color:'+(isLast?'#ccc':'var(--slate)')+';" title="Move down">▼</button>'+
+        '</div>'+
         '<div style="font-size:14px;flex-shrink:0;" title="'+typeConfig.label+'">'+typeIcon+'</div>'+
-        '<div style="flex:1;min-width:0;">'+
-          '<div style="font-size:12px;font-weight:600;color:var(--slate);">'+escHtml(item.name)+'</div>'+
+        '<div onclick="openInventoryItem(\''+item.id+'\')" style="flex:1;min-width:0;cursor:pointer;">'+
+          '<div style="font-size:12px;font-weight:600;color:var(--slate);">'+priorityBadge+escHtml(item.name)+'</div>'+
           '<div style="font-size:10px;color:var(--muted);margin-top:1px;">'+
             (checked && item.currentQty !== '' ? 'Qty: <strong>'+escHtml(String(item.currentQty))+' '+escHtml(item.unit||'')+'</strong>' : (item.itemType==='consumable' ? 'Threshold: '+item.threshold+' '+(item.unit||'') : typeConfig.label))+
             (item.lastCheckedAt ? ' · Last: '+escHtml(item.lastCheckedAt)+(item.lastCheckedBy?' ('+escHtml(item.lastCheckedBy)+')':'') : '')+
@@ -1736,6 +1770,104 @@ function filterSummary(which){
   renderInventory();
   // Scroll to list
   document.getElementById('inventory-list').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ── DRAG-AND-DROP REORDERING ──
+var INV_DRAG_ID = null;
+
+function invDragStart(e, id){
+  INV_DRAG_ID = id;
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', id); } catch(err){}
+  e.currentTarget.style.opacity = '0.4';
+  e.currentTarget.style.transform = 'scale(0.98)';
+}
+
+function invDragOver(e, id){
+  if(!INV_DRAG_ID || INV_DRAG_ID === id) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  var dragged = INVENTORY.find(function(i){ return i.id === INV_DRAG_ID; });
+  var target  = INVENTORY.find(function(i){ return i.id === id; });
+  if(dragged && target && dragged.category !== target.category) return;
+  e.currentTarget.style.boxShadow = 'inset 0 -3px 0 0 var(--teal)';
+}
+
+function invDragLeave(e, el){
+  el.style.boxShadow = '';
+}
+
+function invDrop(e, targetId){
+  e.preventDefault();
+  e.currentTarget.style.boxShadow = '';
+  if(!INV_DRAG_ID || INV_DRAG_ID === targetId) return;
+  var draggedIdx = INVENTORY.findIndex(function(i){ return i.id === INV_DRAG_ID; });
+  var targetIdx  = INVENTORY.findIndex(function(i){ return i.id === targetId; });
+  if(draggedIdx === -1 || targetIdx === -1) return;
+  var dragged = INVENTORY[draggedIdx];
+  var target  = INVENTORY[targetIdx];
+  if(dragged.category !== target.category){
+    notify('Items must be reordered within the same category', 'error');
+    return;
+  }
+  // Remove and re-insert before target
+  INVENTORY.splice(draggedIdx, 1);
+  var newTargetIdx = INVENTORY.findIndex(function(i){ return i.id === targetId; });
+  INVENTORY.splice(newTargetIdx, 0, dragged);
+  reassignSortOrders(dragged.category);
+  saveInventory();
+  pushReorderedCategoryToGAS(dragged.category);
+  renderInventory();
+}
+
+function invDragEnd(e){
+  if(e.currentTarget){
+    e.currentTarget.style.opacity = '';
+    e.currentTarget.style.transform = '';
+  }
+  document.querySelectorAll('[data-inv-id]').forEach(function(el){
+    el.style.boxShadow = '';
+    el.style.opacity = '';
+    el.style.transform = '';
+  });
+  INV_DRAG_ID = null;
+}
+
+// Move via up/down arrow buttons (touch-friendly)
+function moveInventoryItem(id, direction){
+  var item = INVENTORY.find(function(i){ return i.id === id; });
+  if(!item) return;
+  var catItems = INVENTORY
+    .filter(function(i){ return i.category === item.category; })
+    .sort(function(a, b){
+      var ao = (a.sortOrder === undefined || a.sortOrder === '') ? 999999 : parseFloat(a.sortOrder);
+      var bo = (b.sortOrder === undefined || b.sortOrder === '') ? 999999 : parseFloat(b.sortOrder);
+      if(ao === bo) return (a.name||'').localeCompare(b.name||'');
+      return ao - bo;
+    });
+  var idx = catItems.findIndex(function(i){ return i.id === id; });
+  var newIdx = idx + direction;
+  if(newIdx < 0 || newIdx >= catItems.length) return;
+  var tmp = catItems[idx];
+  catItems[idx] = catItems[newIdx];
+  catItems[newIdx] = tmp;
+  catItems.forEach(function(it, i){ it.sortOrder = (i + 1) * 10; });
+  saveInventory();
+  pushReorderedCategoryToGAS(item.category);
+  renderInventory();
+}
+
+function reassignSortOrders(category){
+  var catItems = INVENTORY.filter(function(i){ return i.category === category; });
+  catItems.forEach(function(item, idx){
+    item.sortOrder = (idx + 1) * 10;
+  });
+}
+
+function pushReorderedCategoryToGAS(category){
+  if(!hasUrl()) return;
+  var catItems = INVENTORY.filter(function(i){ return i.category === category; });
+  catItems.forEach(function(item){ pushInventoryItem(item); });
 }
 
 function quickCheckItem(id, status){
