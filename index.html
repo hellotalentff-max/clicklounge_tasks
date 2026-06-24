@@ -241,6 +241,7 @@ select.sinput{appearance:auto;}
         <div style="font-size:13px;font-weight:700;color:var(--slate);display:flex;align-items:center;gap:8px;">
           📦 Monthly Inventory
           <span id="inv-month-badge" style="background:var(--teal);color:#fff;padding:2px 9px;border-radius:10px;font-size:10px;"></span>
+          <span id="inv-sync-status" style="font-size:10px;font-weight:600;"></span>
         </div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px;" id="inv-progress-text">Track studio supplies, props, equipment, and consumables</div>
       </div>
@@ -258,6 +259,8 @@ select.sinput{appearance:auto;}
           <option value="ok">✅ All good</option>
         </select>
         <button class="btn btn-sm btn-teal" onclick="openNewInventoryItem()">+ New Item</button>
+        <button class="btn btn-sm btn-outline" onclick="syncInventoryFromGas()" title="Pull latest from Google Sheets">🔄 Sync</button>
+        <button class="btn btn-sm btn-outline" onclick="pushAllInventoryToServer()" title="Upload all local items to the server (first-time setup)">⬆ Upload All</button>
         <button class="btn btn-sm btn-outline" onclick="createRestockTasks()" title="Auto-create restock tasks for low/out items">🛒 Make Restock Tasks</button>
         <button class="btn btn-sm btn-outline" onclick="exportInventoryReport()">📥 Export Report</button>
         <button class="btn btn-sm btn-outline" onclick="resetMonthlyChecks()" title="Start a fresh check for this month">↻ Reset Check</button>
@@ -1154,6 +1157,205 @@ function saveInventory(){
   localStorage.setItem('cl_inventory', JSON.stringify(INVENTORY));
 }
 
+// ── INVENTORY SYNC TO GOOGLE SHEETS ──
+// Queue + retry pattern so checks made offline aren't lost
+var INV_SYNC_QUEUE = [];
+var INV_SYNC_IN_PROGRESS = false;
+
+function inv_queueSync(action, payload){
+  INV_SYNC_QUEUE.push({action: action, payload: payload, attempts: 0});
+  try { localStorage.setItem('cl_inv_queue', JSON.stringify(INV_SYNC_QUEUE)); } catch(e){}
+  processInventoryQueue();
+}
+
+function loadInventoryQueue(){
+  try {
+    var q = localStorage.getItem('cl_inv_queue');
+    if(q) INV_SYNC_QUEUE = JSON.parse(q);
+  } catch(e){ INV_SYNC_QUEUE = []; }
+}
+
+function saveInventoryQueue(){
+  try { localStorage.setItem('cl_inv_queue', JSON.stringify(INV_SYNC_QUEUE)); } catch(e){}
+}
+
+async function processInventoryQueue(){
+  if(INV_SYNC_IN_PROGRESS) return;
+  if(!hasUrl()) return;
+  if(!INV_SYNC_QUEUE.length) return;
+  INV_SYNC_IN_PROGRESS = true;
+  updateInventorySyncStatus('syncing');
+  while(INV_SYNC_QUEUE.length){
+    var job = INV_SYNC_QUEUE[0];
+    try {
+      var r = await gasCall(job.action, job.payload);
+      if(r && r.ok){
+        INV_SYNC_QUEUE.shift();
+        saveInventoryQueue();
+      } else {
+        job.attempts++;
+        if(job.attempts >= 5){
+          // Give up after 5 tries
+          console.warn('Inventory sync failed permanently for', job.action, r);
+          INV_SYNC_QUEUE.shift();
+          saveInventoryQueue();
+        } else {
+          // Wait and retry the queue later
+          break;
+        }
+      }
+    } catch(e){
+      job.attempts++;
+      if(job.attempts >= 5){
+        INV_SYNC_QUEUE.shift();
+        saveInventoryQueue();
+      } else {
+        break;
+      }
+    }
+  }
+  INV_SYNC_IN_PROGRESS = false;
+  updateInventorySyncStatus(INV_SYNC_QUEUE.length ? 'pending' : 'synced');
+  if(INV_SYNC_QUEUE.length){
+    setTimeout(processInventoryQueue, 10000); // retry in 10s
+  }
+}
+
+function updateInventorySyncStatus(state){
+  var el = document.getElementById('inv-sync-status');
+  if(!el) return;
+  var pending = INV_SYNC_QUEUE.length;
+  if(state === 'syncing'){
+    el.innerHTML = '🔄 Syncing…';
+    el.style.color = 'var(--teal)';
+  } else if(state === 'pending'){
+    el.innerHTML = '⏳ '+pending+' pending';
+    el.style.color = 'var(--gold)';
+  } else if(state === 'offline'){
+    el.innerHTML = '⚡ Offline — saved locally';
+    el.style.color = 'var(--muted)';
+  } else {
+    el.innerHTML = '✓ Synced';
+    el.style.color = 'var(--success)';
+  }
+}
+
+// Push a single item upsert (creating or updating)
+function pushInventoryItem(item){
+  if(!hasUrl()){ updateInventorySyncStatus('offline'); return; }
+  inv_queueSync('saveInventoryItem', {
+    id: item.id,
+    name: item.name,
+    category: item.category || 'other',
+    itemType: item.itemType || 'consumable',
+    unit: item.unit || '',
+    threshold: item.threshold || '',
+    notes: item.notes || '',
+    status: item.status || '',
+    currentQty: item.currentQty || '',
+    lastCheckedAt: item.lastCheckedAt || '',
+    lastCheckedBy: item.lastCheckedBy || '',
+    checkMonth: item.checkMonth || ''
+  });
+}
+
+function pushInventoryDelete(id){
+  if(!hasUrl()){ updateInventorySyncStatus('offline'); return; }
+  inv_queueSync('deleteInventoryItem', {id: id});
+}
+
+// Record a monthly check — updates the item AND adds a check log entry
+function pushInventoryCheck(item){
+  if(!hasUrl()){ updateInventorySyncStatus('offline'); return; }
+  inv_queueSync('recordInventoryCheck', {
+    itemId: item.id,
+    itemName: item.name,
+    monthKey: item.checkMonth,
+    status: item.status,
+    currentQty: item.currentQty || '',
+    checkedBy: item.lastCheckedBy,
+    checkedAt: item.lastCheckedAt,
+    notes: item.notes || ''
+  });
+}
+
+// Pull latest inventory from GAS on app load — merges with localStorage
+async function syncInventoryFromGas(){
+  if(!hasUrl()){
+    updateInventorySyncStatus('offline');
+    return;
+  }
+  updateInventorySyncStatus('syncing');
+  try {
+    var r = await gasCall('getInventory', {});
+    if(r && r.ok && r.items){
+      // Merge: if a server item has a newer updatedAt than local, use server's
+      // For brand new local-only items (not yet synced), keep them so the queue can push them
+      var serverById = {};
+      r.items.forEach(function(s){ serverById[s.id] = s; });
+      var localById = {};
+      INVENTORY.forEach(function(l){ localById[l.id] = l; });
+
+      var merged = [];
+      // First, all server items (these are the source of truth for synced items)
+      r.items.forEach(function(s){
+        var local = localById[s.id];
+        // Normalize the server item — handle archived field type
+        var item = {
+          id: s.id, name: s.name, category: s.category, itemType: s.itemType || 'consumable',
+          unit: s.unit, threshold: s.threshold, notes: s.notes,
+          status: s.status, currentQty: s.currentQty,
+          lastCheckedAt: s.lastCheckedAt, lastCheckedBy: s.lastCheckedBy,
+          checkMonth: s.checkMonth
+        };
+        // If local has a more recent check and is queued, prefer local
+        if(local && local.lastCheckedAt && (!s.lastCheckedAt || String(local.lastCheckedAt) > String(s.lastCheckedAt))){
+          item.status = local.status;
+          item.currentQty = local.currentQty;
+          item.lastCheckedAt = local.lastCheckedAt;
+          item.lastCheckedBy = local.lastCheckedBy;
+          item.checkMonth = local.checkMonth;
+        }
+        merged.push(item);
+      });
+      // Then any local-only items (not yet on server) — keep them, they'll sync up
+      INVENTORY.forEach(function(l){
+        if(!serverById[l.id]) merged.push(l);
+      });
+
+      INVENTORY = merged;
+      saveInventory();
+      updateInventoryBadge();
+      renderInventory();
+      updateInventorySyncStatus(INV_SYNC_QUEUE.length ? 'pending' : 'synced');
+    } else {
+      updateInventorySyncStatus(INV_SYNC_QUEUE.length ? 'pending' : 'synced');
+    }
+  } catch(e){
+    console.warn('Inventory sync failed:', e);
+    updateInventorySyncStatus(INV_SYNC_QUEUE.length ? 'pending' : 'offline');
+  }
+}
+
+// One-time: push all local items to the server (for first-time sync from a device with existing data)
+async function pushAllInventoryToServer(){
+  if(!hasUrl()){ notify('Configure GAS URL first', 'error'); return; }
+  if(!INVENTORY.length){ notify('No items to upload', 'info'); return; }
+  if(!confirm('Upload all '+INVENTORY.length+' items from this device to the server? Server items with the same ID will be overwritten.')) return;
+  notify('Uploading '+INVENTORY.length+' items…', 'info');
+  try {
+    var r = await gasCall('bulkSaveInventoryItems', {items: JSON.stringify(INVENTORY)});
+    if(r && r.ok){
+      notify('✓ Uploaded '+r.saved+' items to server', 'success');
+      updateInventorySyncStatus('synced');
+    } else {
+      notify('Upload failed: '+(r && r.error || 'unknown'), 'error');
+    }
+  } catch(e){
+    notify('Upload error: '+e.message, 'error');
+  }
+}
+
 var INVENTORY = [];
 
 function currentMonthLabel(){
@@ -1548,8 +1750,8 @@ function quickCheckItem(id, status){
   item.lastCheckedAt = todayStr();
   item.lastCheckedBy = getInventoryChecker();
   saveInventory(); updateInventoryBadge();
+  pushInventoryCheck(item);
   renderInventory();
-  // Use type-aware label
   var typeConfig = getItemType(item);
   var statusObj = typeConfig.statuses.find(function(s){ return s.v === status; });
   var label = statusObj ? statusObj.l : status;
@@ -1674,6 +1876,8 @@ function saveInventoryItem(id){
     item.checkMonth = currentMonthKey();
   }
   saveInventory(); updateInventoryBadge();
+  pushInventoryItem(item);
+  if(newStatus) pushInventoryCheck(item);
   closeModal();
   renderInventory();
   notify('✓ '+name+' saved','success');
@@ -1683,6 +1887,7 @@ function deleteInventoryItem(id){
   if(!confirm('Permanently delete this inventory item?')) return;
   INVENTORY = INVENTORY.filter(function(i){ return i.id !== id; });
   saveInventory(); updateInventoryBadge();
+  pushInventoryDelete(id);
   closeModal();
   renderInventory();
   notify('🗑 Item deleted','info');
@@ -2445,6 +2650,7 @@ function updateLastSync(){
 loadTasks();
 loadClients();
 loadInventory();
+loadInventoryQueue();
 updateInventoryBadge();
 updateClientCount();
 
@@ -2461,7 +2667,12 @@ render();
 loadTimeCommandStaff();
 
 // Sync on load
-if(hasUrl()) syncAll();
+if(hasUrl()) {
+  syncAll();
+  syncInventoryFromGas();
+  // Retry any queued inventory pushes
+  setTimeout(processInventoryQueue, 2000);
+}
 
 // Auto-sync every 30 seconds so all staff see updates
 var _syncInterval = null;
