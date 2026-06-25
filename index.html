@@ -2575,12 +2575,13 @@ async function sendDriveLink(taskId){
   if(btn){ btn.disabled=true; btn.textContent='Sending...'; }
 
   try{
-    var result = await gasCall('sendDriveLink', {
+    var result = await gasCall('sendLinkEmail', {
       email: cl.email,
       clientName: t.client,
       driveLink: t.driveLink,
       taskTitle: t.title||'Your photos',
-      taskId: t.id
+      taskId: t.id,
+      sentBy: 'Tasks Manager'
     });
     if(result.ok){
       t.driveLinkSentDate = todayStr();
