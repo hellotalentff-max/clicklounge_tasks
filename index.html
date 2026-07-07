@@ -1348,17 +1348,45 @@ async function pushAllInventoryToServer(){
   if(!hasUrl()){ notify('Configure GAS URL first', 'error'); return; }
   if(!INVENTORY.length){ notify('No items to upload', 'info'); return; }
   if(!confirm('Upload all '+INVENTORY.length+' items from this device to the server? Server items with the same ID will be overwritten.')) return;
-  notify('Uploading '+INVENTORY.length+' items…', 'info');
-  try {
-    var r = await gasCall('bulkSaveInventoryItems', {items: JSON.stringify(INVENTORY)});
-    if(r && r.ok){
-      notify('✓ Uploaded '+r.saved+' items to server', 'success');
-      updateInventorySyncStatus('synced');
-    } else {
-      notify('Upload failed: '+(r && r.error || 'unknown'), 'error');
+
+  // JSONP has a URL length limit (~2000 chars). Send items in small batches
+  // of 5 so the URL never overflows regardless of item description length.
+  var BATCH_SIZE = 5;
+  var total = INVENTORY.length;
+  var uploaded = 0;
+  var failed = 0;
+  var failedItems = [];
+
+  updateInventorySyncStatus('syncing');
+
+  for(var i = 0; i < total; i += BATCH_SIZE){
+    var batch = INVENTORY.slice(i, i + BATCH_SIZE);
+    notify('Uploading '+(i+1)+'-'+Math.min(i+BATCH_SIZE,total)+' of '+total+'…', 'info');
+    try {
+      var r = await gasCall('bulkSaveInventoryItems', {items: JSON.stringify(batch)});
+      if(r && r.ok){
+        uploaded += (r.saved || batch.length);
+      } else {
+        failed += batch.length;
+        failedItems.push(...batch.map(function(it){ return it.name; }));
+      }
+    } catch(e){
+      failed += batch.length;
+      failedItems.push(...batch.map(function(it){ return it.name; }));
     }
-  } catch(e){
-    notify('Upload error: '+e.message, 'error');
+    // Tiny delay between batches so we don't hammer the endpoint
+    await new Promise(function(res){ setTimeout(res, 200); });
+  }
+
+  updateInventorySyncStatus(failed > 0 ? 'pending' : 'synced');
+
+  if(failed === 0){
+    notify('✅ Uploaded all '+uploaded+' items successfully!', 'success');
+  } else if(uploaded > 0){
+    notify('⚠ Uploaded '+uploaded+' items · '+failed+' failed. Try Upload All again.', 'warn');
+    console.warn('Failed items:', failedItems);
+  } else {
+    notify('❌ Upload failed. Check GAS URL and try 🔄 Sync first.', 'error');
   }
 }
 
