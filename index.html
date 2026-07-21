@@ -3029,6 +3029,7 @@ if(!hasUrl()){
 
 render();
 loadTimeCommandStaff();
+  cleanupOldShootPreps(); 
 
 // Sync on load
 if(hasUrl()) {
@@ -3207,7 +3208,39 @@ function hmuTasks(){
     return String(t.type||'')==='HMU Prep' && !t.archived;
   });
 }
+// ── Auto-cleanup: permanently delete Shoot Prep tasks 7+ days past their session date ──
+function cleanupOldShootPreps(){
+  var today = todayStr();
+  var cut = new Date();
+  cut.setDate(cut.getDate() - 7);
+  var cutoff = cut.toLocaleDateString('en-CA', {timeZone:'Asia/Manila'});
 
+  var toDelete = (TASKS||[]).filter(function(t){
+    if(String(t.type||'') !== 'HMU Prep') return false;
+    var d = String(t.due || t.dueDate || '').slice(0,10);
+    if(!d) return false;
+    if(d > today) return false;
+    return d < cutoff;
+  });
+
+  if(!toDelete.length) return;
+
+  var deleted = JSON.parse(localStorage.getItem('cl_tasks_deleted')||'[]');
+  toDelete.forEach(function(t){
+    if(deleted.indexOf(t.id) === -1) deleted.push(t.id);
+    if(hasUrl()) gasCall('deleteRow', {sheet:'Tasks', id:t.id}).catch(function(){});
+  });
+  if(deleted.length > 200) deleted = deleted.slice(-200);
+  localStorage.setItem('cl_tasks_deleted', JSON.stringify(deleted));
+
+  var ids = {};
+  toDelete.forEach(function(t){ ids[t.id] = true; });
+  TASKS = TASKS.filter(function(t){ return !ids[t.id]; });
+  saveTasks();
+
+  console.log('🧹 Cleaned up ' + toDelete.length + ' old shoot prep task(s)');
+}
+  
 // ── Notification badge: count HMU tasks not yet seen on this device ──
 function hmuSeenSet(){
   try{ return new Set(JSON.parse(localStorage.getItem('cl_hmu_seen')||'[]')); }catch(e){ return new Set(); }
@@ -3380,7 +3413,7 @@ function saveHmuDetail(id){
 // Badge refresh after every data load + on start
 (function(){
   var _origLoad = window.addEventListener;
-  document.addEventListener('DOMContentLoaded', function(){ setTimeout(hmuUpdateBadge, 800); });
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(hmuUpdateBadge, 800); setTimeout(cleanupOldShootPreps, 1500); });
   setInterval(hmuUpdateBadge, 30000);
 })();
 </script>
