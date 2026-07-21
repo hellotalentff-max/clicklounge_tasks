@@ -175,53 +175,52 @@ select.sinput{appearance:auto;}
 <!-- Tasks section (default visible) -->
 <div id="section-tasks">
 
-  <!-- Toolbar -->
-  <div class="view-tabs">
-    <button class="btn btn-sm btn-teal" id="view-board-btn" onclick="setView('board')">⊞ Board</button>
-    <button class="btn btn-sm btn-outline" id="view-list-btn" onclick="setView('list')">☰ List</button>
-    <button class="btn btn-sm btn-outline" id="view-archive-btn" onclick="toggleArchived()">📦 Archived</button>
-    <button class="btn btn-sm btn-outline" onclick="openReportModal()">📊 Report</button>
-    <div style="flex:1;"></div>
-    <select id="staff-filter" onchange="setStaffFilter(this.value)" style="padding:5px 10px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:var(--light);min-width:130px;">
-      <option value="">All staff</option>
-    </select>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;" id="filter-bar">
-      <button class="filter-btn active" data-f="today" onclick="setFilter('today')">⭐ Today</button>
-      <button class="filter-btn" data-f="all" onclick="setFilter('all')">All</button>
-      <button class="filter-btn" data-f="new" onclick="setFilter('new')">🆕 New</button>
-      <button class="filter-btn" data-f="inprogress" onclick="setFilter('inprogress')">⚙ In Progress</button>
-      <button class="filter-btn" data-f="pickup" onclick="setFilter('pickup')">📦 Ready</button>
-      <button class="filter-btn" data-f="delivered" onclick="setFilter('delivered')">✓ Delivered</button>
-      <button class="filter-btn" data-f="overdue" onclick="setFilter('overdue')">⚠ Overdue</button>
-    </div>
+  <!-- Row 1: Search + primary actions -->
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+    <input type="text" id="task-search" oninput="setSearch(this.value)" placeholder="🔍 Search…"
+      style="flex:1;min-width:160px;padding:9px 14px;border:1.5px solid var(--border);border-radius:20px;font-size:12px;">
+    <div id="week-done-pill" style="font-size:11px;font-weight:700;color:var(--success);background:rgba(61,140,110,.1);border-radius:16px;padding:7px 14px;white-space:nowrap;"></div>
     <button class="btn btn-gold" onclick="openNewTask()">+ New Task</button>
+    <button class="btn btn-sm btn-outline" onclick="toggleMoreTools()" id="more-tools-btn" title="More options">⋯</button>
   </div>
 
-  <!-- Search + quick stats row -->
-  <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;padding:0 4px;flex-wrap:wrap;">
-    <input type="text" id="task-search" oninput="setSearch(this.value)" placeholder="🔍 Search client, task, or type…"
-      style="flex:1;min-width:180px;padding:8px 12px;border:1.5px solid var(--border);border-radius:20px;font-size:12px;">
-    <div id="week-done-pill" style="font-size:11px;font-weight:700;color:var(--success);background:rgba(61,140,110,.1);border-radius:16px;padding:6px 14px;white-space:nowrap;"></div>
+  <!-- Row 2: Status filter (the main way staff navigate) -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;" id="filter-bar">
+    <button class="filter-btn active" data-f="today" onclick="setFilter('today')">⭐ Today</button>
+    <button class="filter-btn" data-f="all" onclick="setFilter('all')">All</button>
+    <button class="filter-btn" data-f="new" onclick="setFilter('new')">🆕 New</button>
+    <button class="filter-btn" data-f="inprogress" onclick="setFilter('inprogress')">⚙ In Progress</button>
+    <button class="filter-btn" data-f="pickup" onclick="setFilter('pickup')">📦 Ready</button>
+    <button class="filter-btn" data-f="delivered" onclick="setFilter('delivered')">✓ Delivered</button>
+    <button class="filter-btn" data-f="overdue" onclick="setFilter('overdue')">⚠ Overdue</button>
   </div>
 
-  <!-- Quick-add template buttons -->
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:0 4px;align-items:center;">
-    <span style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:700;">Quick add:</span>
-    <button class="filter-btn" onclick="quickAddTask('editing')" style="border-color:rgba(61,140,110,.3);">🖼 Edit</button>
-    <button class="filter-btn" onclick="quickAddTask('printing')" style="border-color:rgba(58,124,165,.3);">🖨 Print</button>
-    <button class="filter-btn" onclick="quickAddTask('framing')" style="border-color:rgba(215,144,104,.3);">🪟 Frame</button>
-    <button class="filter-btn" onclick="quickAddTask('delivery')">📦 Delivery</button>
-    <button class="filter-btn" onclick="quickAddTask('other')">📋 Other</button>
+  <!-- Collapsible "More tools" drawer (hidden by default) -->
+  <div id="more-tools" style="display:none;background:var(--light);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="btn btn-sm btn-teal" id="view-board-btn" onclick="setView('board')">⊞ Board</button>
+      <button class="btn btn-sm btn-outline" id="view-list-btn" onclick="setView('list')">☰ List</button>
+      <button class="btn btn-sm btn-outline" id="view-archive-btn" onclick="toggleArchived()">📦 Archived</button>
+      <button class="btn btn-sm btn-outline" onclick="openReportModal()">📊 Report</button>
+      <select id="staff-filter" onchange="setStaffFilter(this.value)" style="padding:6px 12px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:var(--white);min-width:130px;">
+        <option value="">All staff</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+      <span style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:700;">Quick add:</span>
+      <button class="filter-btn" onclick="quickAddTask('editing')">🖼 Edit</button>
+      <button class="filter-btn" onclick="quickAddTask('printing')">🖨 Print</button>
+      <button class="filter-btn" onclick="quickAddTask('framing')">🪟 Frame</button>
+      <button class="filter-btn" onclick="quickAddTask('delivery')">📦 Delivery</button>
+      <button class="filter-btn" onclick="quickAddTask('other')">📋 Other</button>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;" id="cat-filter-bar"></div>
   </div>
 
-  <!-- Category filter bar -->
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:0 4px;" id="cat-filter-bar"></div>
-
-  <!-- Workload strip -->
-  <div id="workload-strip" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
-
-  <!-- Staff color legend -->
-  <div id="staff-legend" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px 12px;background:var(--light);border-radius:10px;border:1px solid var(--border);"></div>
+  <!-- Workload strip (unified staff view — active + overdue per person) -->
+  <div id="workload-strip" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;"></div>
+  <!-- Legacy legend kept hidden; workload strip replaces it -->
+  <div id="staff-legend" style="display:none;"></div>
 
   <!-- 📤 Send Link Queue — separate from kanban, high priority today's deliveries -->
   <div id="sendlink-section" style="display:none;background:linear-gradient(135deg,rgba(215,144,104,0.10),rgba(215,144,104,0.04));border:1.5px solid rgba(215,144,104,0.25);border-radius:12px;padding:14px 16px;margin-bottom:16px;">
@@ -624,7 +623,7 @@ async function syncAll(){
   try{
     var r = await gasCall('getAll');
     if(r.ok){
-      if(Array.isArray(r.tasks)) { var _del=JSON.parse(localStorage.getItem('cl_tasks_deleted')||'[]'); TASKS = r.tasks.map(function(t){ if(t.due&&!t.dueDate)t.dueDate=t.due; return t; }).filter(function(t){return _del.indexOf(t.id)===-1;}); saveTasks(); }
+      if(Array.isArray(r.tasks)) { var _del=JSON.parse(localStorage.getItem('cl_tasks_deleted')||'[]'); TASKS = r.tasks.map(function(t){ var d=t.due||t.dueDate||''; if(d){t.due=d;t.dueDate=d;} return t; }).filter(function(t){return _del.indexOf(t.id)===-1;}); saveTasks(); }
 
       // Build complete client list from ALL sources
       var clientMap = {};
@@ -875,6 +874,13 @@ function render(){
 }
 
 var CUR_SEARCH = '';
+function toggleMoreTools(){
+  var d = document.getElementById('more-tools');
+  var b = document.getElementById('more-tools-btn');
+  var open = d.style.display === 'none';
+  d.style.display = open ? '' : 'none';
+  if(b) b.classList.toggle('active', open);
+}
 function setSearch(q){ CUR_SEARCH = String(q||'').trim().toLowerCase(); if(CUR_VIEW==='board') renderKanban(); else renderList(); }
 
 // Days-in-stage aging label for a card
@@ -1021,6 +1027,9 @@ function renderSendLinkSection(){
   var allSendlinks = (TASKS||[]).filter(function(t){ return t.type === 'sendlink' && !t.archived; });
   // Show the badge with open count
   var openCount = allSendlinks.filter(function(t){ return t.stage !== 'delivered'; }).length;
+  // Auto-hide the whole panel when there's nothing to deliver — reduces clutter
+  section.style.display = openCount > 0 ? '' : 'none';
+  if(openCount === 0) return;
   var badge = document.getElementById('sendlink-count-badge');
   if(badge){ badge.textContent = openCount; badge.style.background = openCount?'var(--gold)':'var(--muted)'; }
 
