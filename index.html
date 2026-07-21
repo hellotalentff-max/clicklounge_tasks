@@ -70,6 +70,7 @@ select.sinput{appearance:auto;}
 .kanban-col{background:var(--light);border-radius:10px;padding:10px;min-height:300px;}
 .kanban-col-hdr{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:6px 8px;margin-bottom:8px;border-radius:6px;display:flex;align-items:center;justify-content:space-between;}
 .task-card{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer;transition:all .15s;}
+.task-card.tc-overdue{background:linear-gradient(to right,rgba(192,84,74,.06),var(--white));border-color:rgba(192,84,74,.35);}
 .task-card:hover{border-color:var(--teal);box-shadow:0 2px 8px rgba(47,79,79,0.08);transform:translateY(-1px);}
 .tc-title{font-size:13px;font-weight:600;color:var(--slate);margin-bottom:4px;}
 .tc-client{font-size:11px;color:var(--muted);margin-bottom:6px;}
@@ -185,7 +186,8 @@ select.sinput{appearance:auto;}
       <option value="">All staff</option>
     </select>
     <div style="display:flex;gap:6px;flex-wrap:wrap;" id="filter-bar">
-      <button class="filter-btn active" data-f="all" onclick="setFilter('all')">All</button>
+      <button class="filter-btn active" data-f="today" onclick="setFilter('today')">⭐ Today</button>
+      <button class="filter-btn" data-f="all" onclick="setFilter('all')">All</button>
       <button class="filter-btn" data-f="new" onclick="setFilter('new')">🆕 New</button>
       <button class="filter-btn" data-f="inprogress" onclick="setFilter('inprogress')">⚙ In Progress</button>
       <button class="filter-btn" data-f="pickup" onclick="setFilter('pickup')">📦 Ready</button>
@@ -195,8 +197,28 @@ select.sinput{appearance:auto;}
     <button class="btn btn-gold" onclick="openNewTask()">+ New Task</button>
   </div>
 
+  <!-- Search + quick stats row -->
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;padding:0 4px;flex-wrap:wrap;">
+    <input type="text" id="task-search" oninput="setSearch(this.value)" placeholder="🔍 Search client, task, or type…"
+      style="flex:1;min-width:180px;padding:8px 12px;border:1.5px solid var(--border);border-radius:20px;font-size:12px;">
+    <div id="week-done-pill" style="font-size:11px;font-weight:700;color:var(--success);background:rgba(61,140,110,.1);border-radius:16px;padding:6px 14px;white-space:nowrap;"></div>
+  </div>
+
+  <!-- Quick-add template buttons -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:0 4px;align-items:center;">
+    <span style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:700;">Quick add:</span>
+    <button class="filter-btn" onclick="quickAddTask('editing')" style="border-color:rgba(61,140,110,.3);">🖼 Edit</button>
+    <button class="filter-btn" onclick="quickAddTask('printing')" style="border-color:rgba(58,124,165,.3);">🖨 Print</button>
+    <button class="filter-btn" onclick="quickAddTask('framing')" style="border-color:rgba(215,144,104,.3);">🪟 Frame</button>
+    <button class="filter-btn" onclick="quickAddTask('delivery')">📦 Delivery</button>
+    <button class="filter-btn" onclick="quickAddTask('other')">📋 Other</button>
+  </div>
+
   <!-- Category filter bar -->
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:0 4px;" id="cat-filter-bar"></div>
+
+  <!-- Workload strip -->
+  <div id="workload-strip" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
 
   <!-- Staff color legend -->
   <div id="staff-legend" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px 12px;background:var(--light);border-radius:10px;border:1px solid var(--border);"></div>
@@ -391,7 +413,7 @@ var TASK_CATEGORIES = [
 var TASKS = [];
 var _lastSaveTime = 0;
 var CUR_VIEW = 'board';
-var CUR_FILTER = 'all';
+var CUR_FILTER = 'today';
 var CUR_CATEGORY = 'all';
 var CUR_STAFF = '';
 var SHOW_ARCHIVED = false;
@@ -843,11 +865,90 @@ function render(){
   migrateLegacyStages();
   renderCategoryBar();
   populateStaffFilter();
+  renderWorkloadStrip();
+  renderWeekDonePill();
   renderStaffLegend();
   renderSendLinkSection();
   renderInventory();
   if(CUR_VIEW === 'board') renderKanban();
   else renderList();
+}
+
+var CUR_SEARCH = '';
+function setSearch(q){ CUR_SEARCH = String(q||'').trim().toLowerCase(); if(CUR_VIEW==='board') renderKanban(); else renderList(); }
+
+// Days-in-stage aging label for a card
+function taskAgeLabel(t){
+  var ref = t.updatedAt || t.createdAt;
+  if(!ref) return '';
+  var d = new Date(ref); if(isNaN(d)) return '';
+  var days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if(days < 2) return '';
+  var color = days >= 5 ? 'var(--danger)' : days >= 3 ? 'var(--gold)' : 'var(--muted)';
+  return '<span class="tc-badge" style="background:var(--light);color:'+color+';" title="Days in current stage">⏳ '+days+'d</span>';
+}
+
+// Manager view: active + overdue count per staff
+function renderWorkloadStrip(){
+  var el = document.getElementById('workload-strip');
+  if(!el) return;
+  var today = todayStr();
+  var stats = {};
+  (TASKS||[]).filter(function(t){ return !t.archived && t.type!=='sendlink' && t.stage!=='delivered'; }).forEach(function(t){
+    var who = t.assignedTo || '— Unassigned';
+    if(!stats[who]) stats[who] = { active:0, overdue:0 };
+    stats[who].active++;
+    if(t.dueDate && t.dueDate < today) stats[who].overdue++;
+  });
+  var names = Object.keys(stats).sort(function(a,b){ return stats[b].active - stats[a].active; });
+  if(!names.length){ el.innerHTML=''; return; }
+  el.innerHTML = names.map(function(n){
+    var s = stats[n];
+    var sc = staffColor(n==='— Unassigned'?'':n);
+    return '<div style="display:flex;align-items:center;gap:6px;background:var(--white);border:1px solid var(--border);border-radius:20px;padding:4px 12px 4px 4px;font-size:11px;">'+
+      '<span style="width:20px;height:20px;border-radius:50%;background:'+(n==='— Unassigned'?'#d0d0d0':sc.bg)+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;">'+(n==='— Unassigned'?'?':n.charAt(0).toUpperCase())+'</span>'+
+      '<strong>'+escHtml(n)+'</strong>'+
+      '<span style="color:var(--muted);">'+s.active+' active</span>'+
+      (s.overdue?'<span style="color:var(--danger);font-weight:700;">· '+s.overdue+' overdue</span>':'')+
+    '</div>';
+  }).join('');
+}
+
+// This week's completed count
+function renderWeekDonePill(){
+  var el = document.getElementById('week-done-pill');
+  if(!el) return;
+  var now = new Date();
+  var monday = new Date(now); monday.setDate(now.getDate() - ((now.getDay()+6)%7)); monday.setHours(0,0,0,0);
+  var count = (TASKS||[]).filter(function(t){
+    if(t.stage!=='delivered' && !t.completedAt) return false;
+    var c = new Date(t.completedAt||t.updatedAt);
+    return !isNaN(c) && c >= monday;
+  }).length;
+  el.textContent = '✓ '+count+' done this week';
+}
+
+// Quick-add a pre-typed task
+function quickAddTask(type){
+  var labels = { editing:'Photo Editing', printing:'Printing', framing:'Framing', delivery:'Delivery/Pickup', other:'Task' };
+  var client = prompt('Quick add '+(labels[type]||'task')+' — client name (optional):');
+  if(client === null) return; // cancelled
+  var now = nowTs();
+  var t = {
+    id: uid(), type: type,
+    title: labels[type]||'Task',
+    client: (client||'').trim(),
+    clientEmail:'', due:'', dueDate:'',
+    notes:'', driveLink:'',
+    stage:'new', done:'', completed:'', completedAt:'',
+    archived:'', priority:'normal', assignedTo:'',
+    createdAt: now, updatedAt: now
+  };
+  TASKS.push(t);
+  saveTasks();
+  pushTask(t, false);
+  render();
+  notify('➕ '+(labels[type]||'Task')+' added'+(t.client?' for '+t.client:''),'success');
 }
 
 // Migrate any 'review' stage tasks (from before review was removed) to 'inprogress'
@@ -2170,6 +2271,14 @@ function getFilteredTasks(){
     if(CUR_FILTER === 'overdue'){
       var today = todayStr();
       tasks = tasks.filter(function(t){ return t.dueDate && t.dueDate < today && t.stage !== 'delivered'; });
+    } else if(CUR_FILTER === 'today'){
+      // Today view: due today OR overdue OR undated-but-active — the "what do I do now" set
+      var tdy = todayStr();
+      tasks = tasks.filter(function(t){
+        if(t.stage === 'delivered') return false;
+        if(!t.dueDate) return t.stage !== 'delivered';        // undated active work stays visible
+        return t.dueDate <= tdy;                               // due today or overdue
+      });
     } else {
       tasks = tasks.filter(function(t){ return t.stage === CUR_FILTER; });
     }
@@ -2184,6 +2293,23 @@ function getFilteredTasks(){
     if(CUR_STAFF === '__unassigned') tasks = tasks.filter(function(t){ return !t.assignedTo; });
     else tasks = tasks.filter(function(t){ return t.assignedTo === CUR_STAFF; });
   }
+  // Free-text search across client, title, type, notes
+  if(CUR_SEARCH){
+    tasks = tasks.filter(function(t){
+      var hay = (String(t.client||'')+' '+String(t.title||'')+' '+String(t.type||'')+' '+String(t.notes||'')).toLowerCase();
+      return hay.indexOf(CUR_SEARCH) > -1;
+    });
+  }
+  // Sort: overdue first (oldest due first), then by due date, then undated last
+  var _today = todayStr();
+  tasks.sort(function(a,b){
+    var ao = a.dueDate && a.dueDate < _today && a.stage!=='delivered';
+    var bo = b.dueDate && b.dueDate < _today && b.stage!=='delivered';
+    if(ao !== bo) return ao ? -1 : 1;           // overdue floats up
+    var ad = a.dueDate || '9999-99-99';
+    var bd = b.dueDate || '9999-99-99';
+    return ad.localeCompare(bd);                  // then soonest due first
+  });
   return tasks;
 }
 
@@ -2210,7 +2336,8 @@ function renderKanban(){
       var ts = '';
       if(t.createdAt) ts += '<span title="Created" style="font-size:9px;color:var(--muted);">🕐 '+fmtTs(t.createdAt)+'</span>';
       if(t.completedAt) ts += '<span title="Completed" style="font-size:9px;color:var(--success);margin-left:8px;">✓ '+fmtTs(t.completedAt)+'</span>';
-      html += '<div class="task-card'+(isDone?' tc-done':'')+'" data-tid="'+t.id+'" style="border-left:4px solid '+stripeColor+';" onclick="openTaskDetail(this.dataset.tid)">'+
+      html += '<div class="task-card'+(isDone?' tc-done':'')+(isOverdue?' tc-overdue':'')+'" data-tid="'+t.id+'" style="border-left:4px solid '+(isOverdue?'#c0544a':stripeColor)+';" onclick="openTaskDetail(this.dataset.tid)">'+
+        (isOverdue ? '<div style="font-size:9px;font-weight:800;color:#fff;background:#c0544a;border-radius:4px;padding:2px 6px;display:inline-block;margin-bottom:6px;letter-spacing:.5px;">⚠ OVERDUE</div>' : '')+
         '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">'+
           '<input type="checkbox" class="tc-check" '+(isDone?'checked':'')+' onclick="event.stopPropagation();toggleTaskDone(\''+t.id+'\',this.checked);" title="Mark done">'+
           staffAvatar(t.assignedTo, 26)+
@@ -2225,7 +2352,9 @@ function renderKanban(){
           (t.dueDate ? '<span class="tc-badge" style="background:'+(isOverdue?'rgba(192,84,74,0.1)':'var(--light)')+';color:'+(isOverdue?'var(--danger)':'var(--muted)')+';">📅 '+t.dueDate+'</span>' : '')+
           (t.priority==='high' ? '<span class="tc-badge" style="background:rgba(192,84,74,0.1);color:var(--danger);">🔴 High</span>' : '')+
           (t.driveLink ? '<span class="tc-badge" style="background:rgba(81,137,125,0.1);color:var(--teal);">📂 Drive</span>' : '')+
+          taskAgeLabel(t)+
         '</div>'+
+        (!t.assignedTo ? '<button onclick="event.stopPropagation();grabTask(\''+t.id+'\')" style="margin-top:8px;width:100%;padding:6px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">✋ Assign to me</button>' : '')+
         (ts ? '<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);">'+ts+'</div>' : '')+
       '</div>';
     });
@@ -2742,6 +2871,37 @@ function saveTask(existingId){
 }
 
 // ── Toggle done from checkbox on the card itself ──
+// ── One-tap self-assign ──
+function getMyName(){
+  return localStorage.getItem('cl_my_name') || '';
+}
+function setMyName(){
+  var names = (TC_STAFF||[]).map(function(s){ return s.name; });
+  if(!names.length){
+    var manual = prompt('Enter your name (as it appears in staff list):');
+    if(manual && manual.trim()){ localStorage.setItem('cl_my_name', manual.trim()); return manual.trim(); }
+    return '';
+  }
+  var list = names.map(function(n,i){ return (i+1)+'. '+n; }).join('\n');
+  var pick = prompt('Who are you? Enter the number:\n\n'+list);
+  var idx = parseInt(pick)-1;
+  if(idx>=0 && idx<names.length){ localStorage.setItem('cl_my_name', names[idx]); return names[idx]; }
+  return '';
+}
+function grabTask(id){
+  var me = getMyName();
+  if(!me){ me = setMyName(); if(!me) return; }
+  var t = TASKS.find(function(x){return x.id===id;});
+  if(!t) return;
+  t.assignedTo = me;
+  if(t.stage === 'new') t.stage = 'inprogress';
+  t.updatedAt = nowTs();
+  if(!t.createdAt) t.createdAt = nowTs();
+  pushTask(t, false);
+  render();
+  notify('✋ Assigned to you ('+me+')','success');
+}
+
 function toggleTaskDone(id, isDone){
   var t = TASKS.find(function(x){return x.id===id;});
   if(!t) return;
@@ -2956,12 +3116,11 @@ function hmuMarkSeen(){
 var HMU_SECTIONS = [
   { key:'hmua',  icon:'💄', label:'HMUA Assigned',            marker:'HMUA ASSIGNED:' },
   { key:'peg',   icon:'📌', label:'Client Peg / Reference',   marker:'CLIENT PEG / REFERENCE:' },
-  { key:'files', icon:'🗂', label:'File Names for Editing',   marker:'FILE NAMES FOR EDITING:' },
   { key:'buy',   icon:'🛒', label:'To Buy for the Shoot',     marker:'TO BUY FOR THE SHOOT:' },
   { key:'other', icon:'📝', label:'Other Notes',              marker:'OTHER NOTES:' }
 ];
 function hmuParseNotes(notes){
-  var out = { hmua:'', peg:'', files:'', buy:'', other:'', footer:'' };
+  var out = { hmua:'', peg:'', buy:'', other:'', footer:'' };
   var s = String(notes||'');
   var idxs = HMU_SECTIONS.map(function(sec){ return { sec:sec, i:s.indexOf(sec.marker) }; });
   var foot = s.indexOf('— Package:');
@@ -2988,15 +3147,14 @@ function hmuParseNotes(notes){
 function hmuBuildNotes(vals, footer){
   return '💄 HMUA ASSIGNED:\n' + (vals.hmua||'') + '\n\n' +
          '📌 CLIENT PEG / REFERENCE:\n' + (vals.peg||'') + '\n\n' +
-         '🗂 FILE NAMES FOR EDITING:\n' + (vals.files||'') + '\n\n' +
          '🛒 TO BUY FOR THE SHOOT:\n' + (vals.buy||'') + '\n\n' +
          '📝 OTHER NOTES:\n' + (vals.other||'') + '\n\n' +
          (footer||'');
 }
 function hmuPrepStatus(t){
   var p = hmuParseNotes(t.notes);
-  var filled = ['hmua','peg','files','buy','other'].filter(function(k){ return p[k]; }).length;
-  if(String(t.stage)==='delivered' || t.completed || filled >= 4) return 'done';
+  var filled = ['hmua','peg','buy','other'].filter(function(k){ return p[k]; }).length;
+  if(String(t.stage)==='delivered' || t.completed || filled >= 3) return 'done';
   if(filled >= 1 || String(t.stage)==='inprogress') return 'progress';
   return 'new';
 }
@@ -3054,17 +3212,12 @@ function openHmuDetail(id){
   var placeholders = {
     hmua:  'Name of the assigned hair & makeup artist…',
     peg:   'Paste peg links or describe the look…',
-    files: 'IMG_1023.jpg, IMG_1045.jpg…',
     buy:   'Props, makeup items, materials…',
     other: 'Allergies, outfit details, reminders…'
   };
   var boxes = HMU_SECTIONS.map(function(sec){
-    // File Names for Editing shows the due date beside its label
-    var dueTag = (sec.key==='files' && dueStr)
-      ? ' <span style="font-weight:600;color:var(--gold);text-transform:none;letter-spacing:0;">· 📅 Due '+dueStr+'</span>'
-      : '';
     return '<div style="margin-bottom:12px;">'+
-      '<label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);margin-bottom:4px;">'+sec.icon+' '+sec.label+dueTag+'</label>'+
+      '<label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);margin-bottom:4px;">'+sec.icon+' '+sec.label+'</label>'+
       '<textarea id="hmu-'+sec.key+'" style="width:100%;min-height:'+(sec.key==='hmua'?'40px':'64px')+';padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="'+placeholders[sec.key]+'">'+escHtml(p[sec.key]||'')+'</textarea>'+
     '</div>';
   }).join('');
@@ -3089,14 +3242,13 @@ function saveHmuDetail(id){
   var vals = {
     hmua:  document.getElementById('hmu-hmua').value.trim(),
     peg:   document.getElementById('hmu-peg').value.trim(),
-    files: document.getElementById('hmu-files').value.trim(),
     buy:   document.getElementById('hmu-buy').value.trim(),
     other: document.getElementById('hmu-other').value.trim()
   };
   t.notes = hmuBuildNotes(vals, p.footer);
   var done = document.getElementById('hmu-done').checked;
   if(done){ t.stage='delivered'; t.completed = t.completed || new Date().toISOString().slice(0,10); }
-  else if(vals.hmua||vals.peg||vals.files||vals.buy||vals.other){ if(t.stage==='new') t.stage='inprogress'; t.completed=''; }
+  else if(vals.hmua||vals.peg||vals.buy||vals.other){ if(t.stage==='new') t.stage='inprogress'; t.completed=''; }
   t.updated = new Date().toISOString().slice(0,10);
   t.updatedAt = t.updated;
   saveTasks();
