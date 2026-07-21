@@ -3122,26 +3122,29 @@ var HMU_SECTIONS = [
 function hmuParseNotes(notes){
   var out = { hmua:'', peg:'', buy:'', other:'', footer:'' };
   var s = String(notes||'');
-  var idxs = HMU_SECTIONS.map(function(sec){ return { sec:sec, i:s.indexOf(sec.marker) }; });
+  // Include retired markers (e.g. the removed "File Names for Editing") as
+  // section boundaries so old tasks don't bleed removed content into the peg.
+  var ALL_MARKERS = HMU_SECTIONS.map(function(sec){ return sec.marker; })
+    .concat(['FILE NAMES FOR EDITING:']);
+  var boundaries = ALL_MARKERS.map(function(m){ return { m:m, i:s.indexOf(m) }; }).filter(function(x){ return x.i > -1; });
   var foot = s.indexOf('— Package:');
   if(foot > -1) out.footer = s.slice(foot).trim();
-  idxs.forEach(function(cur, n){
-    if(cur.i === -1) return;
-    var start = cur.i + cur.sec.marker.length;
+  HMU_SECTIONS.forEach(function(sec){
+    var ci = s.indexOf(sec.marker);
+    if(ci === -1) return;
+    var start = ci + sec.marker.length;
     var end = s.length;
-    // section ends at the next found marker or the footer
-    idxs.forEach(function(other){ if(other.i > cur.i && other.i < end) end = other.i; });
-    if(foot > cur.i && foot < end) end = foot;
+    // section ends at the NEXT marker of any kind (current or retired), or footer
+    boundaries.forEach(function(b){ if(b.i > ci && b.i < end) end = b.i; });
+    if(foot > ci && foot < end) end = foot;
     var body = s.slice(start, end).trim();
-    // Strip template placeholder lines "(...)"
     body = body.split('\n').filter(function(l){
       var t = l.trim();
       return t && !(t.startsWith('(') && t.endsWith(')'));
-    }).join('\n').replace(/^💄|^🗂|^🛒|^📝|^📌/,'').trim();
-    out[cur.sec.key] = body;
+    }).join('\n').replace(/^[💄🗂🛒📝📌]\s*/,'').trim();
+    out[sec.key] = body;
   });
-  // If notes had no markers at all, dump into other
-  if(idxs.every(function(x){ return x.i === -1; }) && s.trim()) out.other = s.trim();
+  if(boundaries.length === 0 && s.trim() && s.indexOf('— Package:') !== 0) out.other = s.replace(/— Package:.*$/s,'').trim();
   return out;
 }
 function hmuBuildNotes(vals, footer){
