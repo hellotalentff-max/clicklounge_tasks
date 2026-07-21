@@ -129,6 +129,10 @@ select.sinput{appearance:auto;}
       <button class="sb-link active" data-section="tasks" onclick="switchSection('tasks')">
         <span style="font-size:18px;">📋</span><span>Tasks</span>
       </button>
+      <button class="sb-link" data-section="sendlink" onclick="switchSection('sendlink')">
+        <span style="font-size:18px;">📤</span><span>Send Link</span>
+        <span class="sb-badge" id="sb-sendlink-badge" style="display:none;"></span>
+      </button>
       <button class="sb-link" data-section="hmu" onclick="switchSection('hmu')">
         <span style="font-size:18px;">📸</span><span>Photographer Sessions</span>
         <span class="sb-badge" id="sb-hmu-badge" style="display:none;"></span>
@@ -222,34 +226,6 @@ select.sinput{appearance:auto;}
   <!-- Legacy legend kept hidden; workload strip replaces it -->
   <div id="staff-legend" style="display:none;"></div>
 
-  <!-- 📤 Send Link Queue — separate from kanban, high priority today's deliveries -->
-  <div id="sendlink-section" style="display:none;background:linear-gradient(135deg,rgba(215,144,104,0.10),rgba(215,144,104,0.04));border:1.5px solid rgba(215,144,104,0.25);border-radius:12px;padding:14px 16px;margin-bottom:16px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px;">
-      <div>
-        <div style="font-size:13px;font-weight:700;color:var(--slate);display:flex;align-items:center;gap:8px;">
-          📤 Send Link Queue
-          <span id="sendlink-count-badge" style="background:var(--gold);color:#fff;padding:2px 9px;border-radius:10px;font-size:10px;">0</span>
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Day-of-session deliveries — send photos to clients</div>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-        <select id="sendlink-staff-filter" onchange="renderSendLinkSection()" style="padding:5px 10px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:#fff;min-width:120px;">
-          <option value="">All staff</option>
-        </select>
-        <select id="sendlink-filter" onchange="renderSendLinkSection()" style="padding:5px 10px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:#fff;">
-          <option value="today">Today</option>
-          <option value="overdue">⚠ Overdue</option>
-          <option value="upcoming">📅 Upcoming (7 days)</option>
-          <option value="open">All Open</option>
-          <option value="done">✓ Sent</option>
-        </select>
-        <button class="btn btn-sm btn-gold" onclick="openNewSendLink()">+ New Send Link</button>
-        <button class="btn btn-sm btn-outline" onclick="toggleSendLinkCollapsed()" id="sendlink-collapse-btn">⌃ Collapse</button>
-      </div>
-    </div>
-    <div id="sendlink-list"></div>
-  </div>
-
   <!-- Board view -->
   <div id="board-view">
     <div class="kanban" id="kanban-board"></div>
@@ -260,6 +236,28 @@ select.sinput{appearance:auto;}
     <div id="task-list"></div>
   </div>
 </div> <!-- end section-tasks -->
+
+<!-- 📤 SEND LINK section — today's clients ready for photo delivery -->
+<div id="section-sendlink" style="display:none;">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+    <div>
+      <h2 style="margin:0;font-size:18px;">📤 Send Photo Links</h2>
+      <div style="font-size:11px;color:var(--muted);">Clients who visited — paste their Google Drive link and send</div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+      <select id="sl2-when" onchange="renderSendLinkTab()" style="padding:6px 12px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:var(--white);">
+        <option value="today">📅 Today</option>
+        <option value="week">This week</option>
+        <option value="pending">All pending</option>
+        <option value="sent">✓ Sent</option>
+      </select>
+      <button class="btn btn-sm btn-outline" onclick="openNewSendLink()">+ Manual</button>
+    </div>
+  </div>
+  <div id="sl2-list"></div>
+</div>
+
+<!-- HMU / Photographer section -->
 
 <!-- Inventory section (separate page in sidebar nav) -->
 <!-- 💄 HMU Prep section — calendar of photographer+HMU sessions -->
@@ -588,6 +586,7 @@ function loadClients(){
 
       // Also extract from registrations
       if(Array.isArray(parsed.registrations)){
+        slSetRegistrations(parsed.registrations);
         parsed.registrations.forEach(function(r){
           var key = (r.fbName||'').toLowerCase();
           if(key && !existingNames[key]){
@@ -638,6 +637,7 @@ async function syncAll(){
 
       // 2. Registrations
       if(Array.isArray(r.registrations)){
+        slSetRegistrations(r.registrations);
         r.registrations.forEach(function(reg){
           var key = (reg.fbName||'').trim().toLowerCase();
           if(key && !clientMap[key]){
@@ -785,7 +785,7 @@ function toggleArchived(){
 }
 
 function switchSection(name){
-  ['tasks','inventory','settings','hmu'].forEach(function(s){
+  ['tasks','inventory','settings','hmu','sendlink'].forEach(function(s){
     var pnl = document.getElementById('section-'+s);
     if(pnl) pnl.style.display = (s === name) ? '' : 'none';
   });
@@ -795,6 +795,9 @@ function switchSection(name){
   if(name === 'inventory'){
     populateInventoryChecker();
     renderInventory();
+  }
+  if(name === 'sendlink'){
+    renderSendLinkTab();
   }
   if(name === 'hmu'){
     hmuMarkSeen();
@@ -867,7 +870,7 @@ function render(){
   renderWorkloadStrip();
   renderWeekDonePill();
   renderStaffLegend();
-  renderSendLinkSection();
+  slUpdateBadge();
   renderInventory();
   if(CUR_VIEW === 'board') renderKanban();
   else renderList();
@@ -3092,6 +3095,108 @@ document.addEventListener('visibilitychange', function(){
 </body>
 </html>
 <script>
+// ════════════════════════════════════════════════════════════
+//  📤 SEND LINK TAB — auto-populated from registrations
+// ════════════════════════════════════════════════════════════
+var SL2_REG = [];
+function slSetRegistrations(regs){ if(Array.isArray(regs)) SL2_REG = regs; slUpdateBadge(); }
+function slUpdateBadge(){
+  var b = document.getElementById('sb-sendlink-badge');
+  if(!b) return;
+  var today = todayStr();
+  var sentClients = new Set((TASKS||[]).filter(function(t){
+    return t.type==='sendlink' && (t.stage==='delivered'||t.driveLinkSentDate);
+  }).map(function(t){ return String(t.client||'').toLowerCase(); }));
+  var pending = SL2_REG.filter(function(r){
+    return String(r.date||'').slice(0,10)===today && !sentClients.has(String(r.fbName||'').toLowerCase());
+  }).length;
+  if(pending>0){ b.textContent=pending; b.style.display=''; } else b.style.display='none';
+}
+function renderSendLinkTab(){
+  var box = document.getElementById('sl2-list');
+  if(!box) return;
+  var when = (document.getElementById('sl2-when')||{}).value || 'today';
+  var today = todayStr();
+  var slByClient = {};
+  (TASKS||[]).filter(function(t){ return t.type==='sendlink' && !t.archived; }).forEach(function(t){
+    slByClient[String(t.client||'').toLowerCase()] = t;
+  });
+  var rows = SL2_REG.map(function(r){
+    var name = String(r.fbName||'').trim();
+    var existing = slByClient[name.toLowerCase()];
+    return { name:name, email:r.email||(existing&&existing.clientEmail)||'', date:String(r.date||'').slice(0,10),
+      task:existing||null, sent:!!(existing&&(existing.stage==='delivered'||existing.driveLinkSentDate)),
+      driveLink:existing?existing.driveLink||'':'' };
+  });
+  (TASKS||[]).filter(function(t){ return t.type==='sendlink' && !t.archived; }).forEach(function(t){
+    var nm = String(t.client||'').toLowerCase();
+    if(!rows.some(function(x){ return x.name.toLowerCase()===nm; })){
+      rows.push({ name:t.client||'', email:t.clientEmail||'', date:String(t.dueDate||t.createdAt||'').slice(0,10),
+        task:t, sent:(t.stage==='delivered'||t.driveLinkSentDate), driveLink:t.driveLink||'' });
+    }
+  });
+  var weekAgo = new Date(Date.now()-7*86400000).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
+  rows = rows.filter(function(x){
+    if(when==='today')   return x.date===today && !x.sent;
+    if(when==='week')    return x.date>=weekAgo && !x.sent;
+    if(when==='pending') return !x.sent;
+    if(when==='sent')    return x.sent;
+    return true;
+  });
+  var seen={}; rows = rows.filter(function(x){ var k=x.name.toLowerCase(); if(!k||seen[k])return false; seen[k]=true; return true; });
+  rows.sort(function(a,b){ if(a.sent!==b.sent) return a.sent?1:-1; return String(b.date).localeCompare(String(a.date)); });
+  if(!rows.length){
+    box.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted);">'+
+      '<div style="font-size:36px;margin-bottom:8px;">📭</div>'+
+      '<div style="font-size:13px;">'+(when==='today'?'No client deliveries for today yet.':'Nothing here.')+'</div>'+
+      '<div style="font-size:11px;margin-top:4px;">Clients appear here automatically when they register at the studio.</div></div>';
+    return;
+  }
+  box.innerHTML = rows.map(function(x, i){
+    var slug='sl2-'+i;
+    if(x.sent){
+      return '<div style="background:rgba(61,140,110,.06);border:1px solid rgba(61,140,110,.25);border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">'+
+        '<div><div style="font-weight:700;font-size:13px;">✓ '+escHtml(x.name)+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);">'+escHtml(x.email||'no email')+' · sent</div></div>'+
+        (x.driveLink?'<a href="'+escHtml(x.driveLink)+'" target="_blank" style="font-size:11px;color:var(--teal);">📂 View link</a>':'')+'</div>';
+    }
+    var hasEmail=!!x.email;
+    return '<div style="background:var(--white);border:1px solid var(--border);border-left:4px solid var(--gold);border-radius:12px;padding:14px;margin-bottom:10px;">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">'+
+        '<div style="font-weight:800;font-size:14px;">'+escHtml(x.name)+'</div>'+
+        '<div style="font-size:11px;color:'+(hasEmail?'var(--muted)':'var(--danger)')+';">'+(hasEmail?'📧 '+escHtml(x.email):'⚠ no email on file')+'</div></div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<input type="url" id="'+slug+'-link" placeholder="Paste Google Drive link…" value="'+escHtml(x.driveLink)+'" style="flex:1;min-width:180px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;">'+
+        '<button class="btn btn-gold" onclick="sl2Send(\''+encodeURIComponent(x.name)+'\',\''+encodeURIComponent(x.email)+'\',\''+slug+'\')" '+(hasEmail?'':'disabled')+'>📤 Send</button>'+
+      '</div></div>';
+  }).join('');
+}
+async function sl2Send(nameEnc, emailEnc, slug){
+  var name=decodeURIComponent(nameEnc), email=decodeURIComponent(emailEnc);
+  var link=((document.getElementById(slug+'-link')||{}).value||'').trim();
+  if(!email){ notify('No email on file for '+name,'error'); return; }
+  if(!link || !/^https?:\/\//.test(link)){ notify('Paste a valid Google Drive link first','error'); return; }
+  var btn=event.target; if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
+  var t=(TASKS||[]).find(function(x){ return x.type==='sendlink' && String(x.client||'').toLowerCase()===name.toLowerCase(); });
+  if(!t){
+    var now=nowTs();
+    t={ id:uid(), type:'sendlink', title:'Send photos — '+name, client:name, clientEmail:email,
+      due:todayStr(), dueDate:todayStr(), notes:'', driveLink:link, stage:'new', done:'', completed:'',
+      completedAt:'', archived:'', priority:'high', assignedTo:'', createdAt:now, updatedAt:now };
+    TASKS.push(t);
+  } else { t.driveLink=link; t.clientEmail=email; }
+  saveTasks();
+  try{
+    var result=await gasCall('sendLinkEmail',{ email:email, clientName:name, driveLink:link, taskTitle:'Your photos', taskId:t.id, sentBy:'Send Link Tab' });
+    if(result && result.ok){
+      t.driveLinkSentDate=todayStr(); t.stage='delivered'; t.completedAt=nowTs();
+      pushTask(t,false);
+      notify('📤 Photos sent to '+email,'success');
+      renderSendLinkTab(); slUpdateBadge();
+    } else { notify('Send failed: '+((result&&result.error)||'unknown'),'error'); if(btn){ btn.disabled=false; btn.textContent='📤 Send'; } }
+  }catch(e){ notify('Error: '+e.message,'error'); if(btn){ btn.disabled=false; btn.textContent='📤 Send'; } }
+}
+
 // ════════════════════════════════════════════════════════════
 //  💄 HMU PREP TAB — calendar view + structured notes + badge
 // ════════════════════════════════════════════════════════════
