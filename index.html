@@ -128,6 +128,10 @@ select.sinput{appearance:auto;}
       <button class="sb-link active" data-section="tasks" onclick="switchSection('tasks')">
         <span style="font-size:18px;">📋</span><span>Tasks</span>
       </button>
+      <button class="sb-link" data-section="hmu" onclick="switchSection('hmu')">
+        <span style="font-size:18px;">💄</span><span>HMU Prep</span>
+        <span class="sb-badge" id="sb-hmu-badge" style="display:none;"></span>
+      </button>
       <button class="sb-link" data-section="inventory" onclick="switchSection('inventory')">
         <span style="font-size:18px;">📦</span><span>Inventory</span>
         <span class="sb-badge" id="sb-inv-badge" style="display:none;"></span>
@@ -237,6 +241,29 @@ select.sinput{appearance:auto;}
 </div> <!-- end section-tasks -->
 
 <!-- Inventory section (separate page in sidebar nav) -->
+<!-- 💄 HMU Prep section — calendar of photographer+HMU sessions -->
+<div id="section-hmu" style="display:none;">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+    <div>
+      <h2 style="margin:0;font-size:18px;">💄 HMU Prep Sessions</h2>
+      <div style="font-size:11px;color:var(--muted);">Photographer sessions with hair & makeup — click a session to fill in the prep details</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="btn btn-sm btn-outline" onclick="hmuMonthShift(-1)">‹</button>
+      <div id="hmu-cal-label" style="font-weight:800;font-size:13px;min-width:130px;text-align:center;"></div>
+      <button class="btn btn-sm btn-outline" onclick="hmuMonthShift(1)">›</button>
+      <button class="btn btn-sm btn-teal" onclick="hmuGoToday()">Today</button>
+    </div>
+  </div>
+  <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+    <div id="hmu-cal-head" style="display:grid;grid-template-columns:repeat(7,1fr);background:var(--slate);"></div>
+    <div id="hmu-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:minmax(88px,auto);"></div>
+  </div>
+  <div style="display:flex;gap:12px;margin-top:10px;font-size:10px;color:var(--muted);flex-wrap:wrap;">
+    <span>🟡 Prep not started</span><span>🔵 Prep in progress</span><span>🟢 Prep complete</span>
+  </div>
+</div>
+
 <div id="section-inventory" style="display:none;">
   <h2 style="font-size:18px;font-weight:800;margin-bottom:14px;">📦 Monthly Inventory</h2>
   <div id="inventory-section" style="background:linear-gradient(135deg,rgba(81,137,125,0.10),rgba(81,137,125,0.04));border:1.5px solid rgba(81,137,125,0.25);border-radius:12px;padding:14px 16px;margin-bottom:16px;">
@@ -737,7 +764,7 @@ function toggleArchived(){
 }
 
 function switchSection(name){
-  ['tasks','inventory','settings'].forEach(function(s){
+  ['tasks','inventory','settings','hmu'].forEach(function(s){
     var pnl = document.getElementById('section-'+s);
     if(pnl) pnl.style.display = (s === name) ? '' : 'none';
   });
@@ -747,6 +774,10 @@ function switchSection(name){
   if(name === 'inventory'){
     populateInventoryChecker();
     renderInventory();
+  }
+  if(name === 'hmu'){
+    hmuMarkSeen();
+    renderHmuCalendar();
   }
   if(name === 'tasks') render();
   // Close mobile sidebar after selecting
@@ -2891,3 +2922,180 @@ document.addEventListener('visibilitychange', function(){
 </script>
 </body>
 </html>
+<script>
+// ════════════════════════════════════════════════════════════
+//  💄 HMU PREP TAB — calendar view + structured notes + badge
+// ════════════════════════════════════════════════════════════
+var HMU_Y = new Date().getFullYear(), HMU_M = new Date().getMonth();
+
+function hmuTasks(){
+  return (TASKS||[]).filter(function(t){
+    return String(t.type||'')==='HMU Prep' && !t.archived;
+  });
+}
+
+// ── Notification badge: count HMU tasks not yet seen on this device ──
+function hmuSeenSet(){
+  try{ return new Set(JSON.parse(localStorage.getItem('cl_hmu_seen')||'[]')); }catch(e){ return new Set(); }
+}
+function hmuUpdateBadge(){
+  var seen = hmuSeenSet();
+  var unseen = hmuTasks().filter(function(t){ return !seen.has(String(t.id)); }).length;
+  var b = document.getElementById('sb-hmu-badge');
+  if(!b) return;
+  if(unseen > 0){ b.textContent = unseen; b.style.display=''; }
+  else b.style.display='none';
+}
+function hmuMarkSeen(){
+  var ids = hmuTasks().map(function(t){ return String(t.id); });
+  localStorage.setItem('cl_hmu_seen', JSON.stringify(ids));
+  hmuUpdateBadge();
+}
+
+// ── Structured notes: parse the 4 sections out of the notes blob ──
+var HMU_SECTIONS = [
+  { key:'peg',   icon:'📌', label:'Client Peg / Reference',   marker:'CLIENT PEG / REFERENCE:' },
+  { key:'files', icon:'🗂', label:'File Names for Editing',   marker:'FILE NAMES FOR EDITING:' },
+  { key:'buy',   icon:'🛒', label:'To Buy for the Shoot',     marker:'TO BUY FOR THE SHOOT:' },
+  { key:'other', icon:'📝', label:'Other Notes',              marker:'OTHER NOTES:' }
+];
+function hmuParseNotes(notes){
+  var out = { peg:'', files:'', buy:'', other:'', footer:'' };
+  var s = String(notes||'');
+  var idxs = HMU_SECTIONS.map(function(sec){ return { sec:sec, i:s.indexOf(sec.marker) }; });
+  var foot = s.indexOf('— Package:');
+  if(foot > -1) out.footer = s.slice(foot).trim();
+  idxs.forEach(function(cur, n){
+    if(cur.i === -1) return;
+    var start = cur.i + cur.sec.marker.length;
+    var end = s.length;
+    // section ends at the next found marker or the footer
+    idxs.forEach(function(other){ if(other.i > cur.i && other.i < end) end = other.i; });
+    if(foot > cur.i && foot < end) end = foot;
+    var body = s.slice(start, end).trim();
+    // Strip template placeholder lines "(...)"
+    body = body.split('\n').filter(function(l){
+      var t = l.trim();
+      return t && !(t.startsWith('(') && t.endsWith(')'));
+    }).join('\n').replace(/^💄|^🗂|^🛒|^📝|^📌/,'').trim();
+    out[cur.sec.key] = body;
+  });
+  // If notes had no markers at all, dump into other
+  if(idxs.every(function(x){ return x.i === -1; }) && s.trim()) out.other = s.trim();
+  return out;
+}
+function hmuBuildNotes(vals, footer){
+  return '📌 CLIENT PEG / REFERENCE:\n' + (vals.peg||'') + '\n\n' +
+         '🗂 FILE NAMES FOR EDITING:\n' + (vals.files||'') + '\n\n' +
+         '🛒 TO BUY FOR THE SHOOT:\n' + (vals.buy||'') + '\n\n' +
+         '📝 OTHER NOTES:\n' + (vals.other||'') + '\n\n' +
+         (footer||'');
+}
+function hmuPrepStatus(t){
+  var p = hmuParseNotes(t.notes);
+  var filled = ['peg','files','buy','other'].filter(function(k){ return p[k]; }).length;
+  if(String(t.stage)==='delivered' || t.completed || filled >= 3) return 'done';
+  if(filled >= 1 || String(t.stage)==='inprogress') return 'progress';
+  return 'new';
+}
+
+// ── Calendar rendering ──
+function hmuMonthShift(d){ HMU_M += d; if(HMU_M<0){HMU_M=11;HMU_Y--;} if(HMU_M>11){HMU_M=0;HMU_Y++;} renderHmuCalendar(); }
+function hmuGoToday(){ var n=new Date(); HMU_Y=n.getFullYear(); HMU_M=n.getMonth(); renderHmuCalendar(); }
+
+function renderHmuCalendar(){
+  var head = document.getElementById('hmu-cal-head');
+  var grid = document.getElementById('hmu-cal-grid');
+  var lbl  = document.getElementById('hmu-cal-label');
+  if(!head || !grid) return;
+
+  lbl.textContent = new Date(HMU_Y, HMU_M, 1).toLocaleDateString('en-PH',{month:'long',year:'numeric'});
+  head.innerHTML = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(function(d){
+    return '<div style="padding:7px 4px;text-align:center;font-size:10px;font-weight:800;letter-spacing:1px;color:var(--cream);">'+d+'</div>';
+  }).join('');
+
+  var first = new Date(HMU_Y, HMU_M, 1).getDay();
+  var days  = new Date(HMU_Y, HMU_M+1, 0).getDate();
+  var todayStr = new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
+  var tasks = hmuTasks();
+
+  var html = '';
+  for(var b=0;b<first;b++) html += '<div style="background:var(--light);border:1px solid var(--border);"></div>';
+  for(var d=1; d<=days; d++){
+    var ds = HMU_Y+'-'+String(HMU_M+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    var dayTasks = tasks.filter(function(t){ return String(t.due||t.dueDate||'').slice(0,10)===ds; })
+      .sort(function(a,b){
+        var tm = function(t){ var m=String(t.title||'').match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i); if(!m) return 9999; var h=parseInt(m[1]); if(/PM/i.test(m[3])&&h<12)h+=12; if(/AM/i.test(m[3])&&h===12)h=0; return h*60+parseInt(m[2]); };
+        return tm(a)-tm(b);
+      });
+    var isToday = ds===todayStr;
+    var chips = dayTasks.map(function(t){
+      var st = hmuPrepStatus(t);
+      var col = st==='done' ? ['#d4edda','#3d8c6e'] : st==='progress' ? ['#d6e9f8','#3a7ca5'] : ['#fff3cd','#d79068'];
+      var nm = String(t.client||t.title||'').replace(/^💄\s*HMU Prep\s*—\s*/,'').replace(/\s*\(.*?\)\s*$/,'');
+      var timeM = String(t.title||'').match(/\((\d{1,2}:\d{2}\s*[AP]M)\)/i);
+      return '<div onclick="openHmuDetail(\''+t.id+'\')" style="font-size:9px;background:'+col[0]+';border:1px solid '+col[1]+';border-left:3px solid '+col[1]+';border-radius:3px;padding:2px 4px;margin-top:2px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+
+        (timeM?'<strong>'+timeM[1]+'</strong> ':'')+esc(nm)+'</div>';
+    }).join('');
+    html += '<div style="min-height:88px;background:'+(isToday?'rgba(215,144,104,.07)':'var(--white)')+';border:1px solid var(--border);padding:4px;">'+
+      '<div style="font-size:11px;font-weight:'+(isToday?'800':'500')+';color:'+(isToday?'var(--gold)':'var(--muted)')+';">'+d+'</div>'+chips+'</div>';
+  }
+  grid.innerHTML = html;
+}
+
+// ── Detail modal with 4 separate boxes ──
+function openHmuDetail(id){
+  var t = (TASKS||[]).find(function(x){ return String(x.id)===String(id); });
+  if(!t){ notify('Task not found','error'); return; }
+  var p = hmuParseNotes(t.notes);
+  var boxes = HMU_SECTIONS.map(function(sec){
+    return '<div style="margin-bottom:12px;">'+
+      '<label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);margin-bottom:4px;">'+sec.icon+' '+sec.label+'</label>'+
+      '<textarea id="hmu-'+sec.key+'" style="width:100%;min-height:64px;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="'+(sec.key==='peg'?'Paste peg links or describe the look…':sec.key==='files'?'IMG_1023.jpg, IMG_1045.jpg…':sec.key==='buy'?'Props, makeup items, materials…':'Allergies, outfit details, reminders…')+'">'+esc(p[sec.key]||'')+'</textarea>'+
+    '</div>';
+  }).join('');
+  openModal(
+    '<h3 style="margin:0 0 2px;">💄 '+esc(t.client||'HMU Prep')+'</h3>'+
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">'+esc(p.footer||('Due '+String(t.due||'').slice(0,10)))+'</div>'+
+    boxes+
+    '<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:4px;flex-wrap:wrap;">'+
+      '<label style="font-size:11px;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="hmu-done" '+(t.completed||t.stage==='delivered'?'checked':'')+' style="accent-color:var(--teal);width:16px;height:16px;"> Prep complete</label>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
+        '<button class="btn btn-teal" onclick="saveHmuDetail(\''+t.id+'\')">💾 Save</button>'+
+      '</div>'+
+    '</div>'
+  );
+}
+
+function saveHmuDetail(id){
+  var t = (TASKS||[]).find(function(x){ return String(x.id)===String(id); });
+  if(!t) return;
+  var p = hmuParseNotes(t.notes);
+  var vals = {
+    peg:   document.getElementById('hmu-peg').value.trim(),
+    files: document.getElementById('hmu-files').value.trim(),
+    buy:   document.getElementById('hmu-buy').value.trim(),
+    other: document.getElementById('hmu-other').value.trim()
+  };
+  t.notes = hmuBuildNotes(vals, p.footer);
+  var done = document.getElementById('hmu-done').checked;
+  if(done){ t.stage='delivered'; t.completed = t.completed || new Date().toISOString().slice(0,10); }
+  else if(vals.peg||vals.files||vals.buy||vals.other){ if(t.stage==='new') t.stage='inprogress'; t.completed=''; }
+  t.updated = new Date().toISOString().slice(0,10);
+  saveTasks();
+  if(typeof queueSync==='function') queueSync('saveTask', t);
+  else if(typeof gasCall==='function') gasCall('saveTask', t).catch(function(){});
+  closeModal();
+  renderHmuCalendar();
+  hmuUpdateBadge();
+  notify('💾 HMU prep saved for '+(t.client||''),'success');
+}
+
+// Badge refresh after every data load + on start
+(function(){
+  var _origLoad = window.addEventListener;
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(hmuUpdateBadge, 800); });
+  setInterval(hmuUpdateBadge, 30000);
+})();
+</script>
