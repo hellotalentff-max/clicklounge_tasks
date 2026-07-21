@@ -3192,7 +3192,7 @@ function renderHmuCalendar(){
     var chips = dayTasks.map(function(t){
       var st = hmuPrepStatus(t);
       var col = st==='done' ? ['#d4edda','#3d8c6e'] : st==='progress' ? ['#d6e9f8','#3a7ca5'] : ['#fff3cd','#d79068'];
-      var nm = String(t.client||t.title||'').replace(/^💄\s*HMU Prep\s*—\s*/,'').replace(/\s*\(.*?\)\s*$/,'');
+      var nm = String(t.client||'').trim() || String(t.title||'').replace(/^[💄📸]\s*/,'').replace(/\s*—.*$/,'').replace(/\s*\(.*?\)\s*$/,'');
       var timeM = String(t.title||'').match(/\((\d{1,2}:\d{2}\s*[AP]M)\)/i);
       return '<div onclick="openHmuDetail(\''+t.id+'\')" style="font-size:9px;background:'+col[0]+';border:1px solid '+col[1]+';border-left:3px solid '+col[1]+';border-radius:3px;padding:2px 4px;margin-top:2px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+
         (timeM?'<strong>'+timeM[1]+'</strong> ':'')+escHtml(nm)+'</div>';
