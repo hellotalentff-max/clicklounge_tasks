@@ -129,7 +129,7 @@ select.sinput{appearance:auto;}
         <span style="font-size:18px;">📋</span><span>Tasks</span>
       </button>
       <button class="sb-link" data-section="hmu" onclick="switchSection('hmu')">
-        <span style="font-size:18px;">💄</span><span>HMU Prep</span>
+        <span style="font-size:18px;">📸</span><span>Photographer Sessions</span>
         <span class="sb-badge" id="sb-hmu-badge" style="display:none;"></span>
       </button>
       <button class="sb-link" data-section="inventory" onclick="switchSection('inventory')">
@@ -245,7 +245,7 @@ select.sinput{appearance:auto;}
 <div id="section-hmu" style="display:none;">
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
     <div>
-      <h2 style="margin:0;font-size:18px;">💄 HMU Prep Sessions</h2>
+      <h2 style="margin:0;font-size:18px;">📸 Photographer Sessions</h2>
       <div style="font-size:11px;color:var(--muted);">Photographer sessions with hair & makeup — click a session to fill in the prep details</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
@@ -2954,13 +2954,14 @@ function hmuMarkSeen(){
 
 // ── Structured notes: parse the 4 sections out of the notes blob ──
 var HMU_SECTIONS = [
+  { key:'hmua',  icon:'💄', label:'HMUA Assigned',            marker:'HMUA ASSIGNED:' },
   { key:'peg',   icon:'📌', label:'Client Peg / Reference',   marker:'CLIENT PEG / REFERENCE:' },
   { key:'files', icon:'🗂', label:'File Names for Editing',   marker:'FILE NAMES FOR EDITING:' },
   { key:'buy',   icon:'🛒', label:'To Buy for the Shoot',     marker:'TO BUY FOR THE SHOOT:' },
   { key:'other', icon:'📝', label:'Other Notes',              marker:'OTHER NOTES:' }
 ];
 function hmuParseNotes(notes){
-  var out = { peg:'', files:'', buy:'', other:'', footer:'' };
+  var out = { hmua:'', peg:'', files:'', buy:'', other:'', footer:'' };
   var s = String(notes||'');
   var idxs = HMU_SECTIONS.map(function(sec){ return { sec:sec, i:s.indexOf(sec.marker) }; });
   var foot = s.indexOf('— Package:');
@@ -2985,7 +2986,8 @@ function hmuParseNotes(notes){
   return out;
 }
 function hmuBuildNotes(vals, footer){
-  return '📌 CLIENT PEG / REFERENCE:\n' + (vals.peg||'') + '\n\n' +
+  return '💄 HMUA ASSIGNED:\n' + (vals.hmua||'') + '\n\n' +
+         '📌 CLIENT PEG / REFERENCE:\n' + (vals.peg||'') + '\n\n' +
          '🗂 FILE NAMES FOR EDITING:\n' + (vals.files||'') + '\n\n' +
          '🛒 TO BUY FOR THE SHOOT:\n' + (vals.buy||'') + '\n\n' +
          '📝 OTHER NOTES:\n' + (vals.other||'') + '\n\n' +
@@ -2993,8 +2995,8 @@ function hmuBuildNotes(vals, footer){
 }
 function hmuPrepStatus(t){
   var p = hmuParseNotes(t.notes);
-  var filled = ['peg','files','buy','other'].filter(function(k){ return p[k]; }).length;
-  if(String(t.stage)==='delivered' || t.completed || filled >= 3) return 'done';
+  var filled = ['hmua','peg','files','buy','other'].filter(function(k){ return p[k]; }).length;
+  if(String(t.stage)==='delivered' || t.completed || filled >= 4) return 'done';
   if(filled >= 1 || String(t.stage)==='inprogress') return 'progress';
   return 'new';
 }
@@ -3048,15 +3050,27 @@ function openHmuDetail(id){
   var t = (TASKS||[]).find(function(x){ return String(x.id)===String(id); });
   if(!t){ notify('Task not found','error'); return; }
   var p = hmuParseNotes(t.notes);
+  var dueStr = String(t.due||t.dueDate||'').slice(0,10);
+  var placeholders = {
+    hmua:  'Name of the assigned hair & makeup artist…',
+    peg:   'Paste peg links or describe the look…',
+    files: 'IMG_1023.jpg, IMG_1045.jpg…',
+    buy:   'Props, makeup items, materials…',
+    other: 'Allergies, outfit details, reminders…'
+  };
   var boxes = HMU_SECTIONS.map(function(sec){
+    // File Names for Editing shows the due date beside its label
+    var dueTag = (sec.key==='files' && dueStr)
+      ? ' <span style="font-weight:600;color:var(--gold);text-transform:none;letter-spacing:0;">· 📅 Due '+dueStr+'</span>'
+      : '';
     return '<div style="margin-bottom:12px;">'+
-      '<label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);margin-bottom:4px;">'+sec.icon+' '+sec.label+'</label>'+
-      '<textarea id="hmu-'+sec.key+'" style="width:100%;min-height:64px;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="'+(sec.key==='peg'?'Paste peg links or describe the look…':sec.key==='files'?'IMG_1023.jpg, IMG_1045.jpg…':sec.key==='buy'?'Props, makeup items, materials…':'Allergies, outfit details, reminders…')+'">'+escHtml(p[sec.key]||'')+'</textarea>'+
+      '<label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);margin-bottom:4px;">'+sec.icon+' '+sec.label+dueTag+'</label>'+
+      '<textarea id="hmu-'+sec.key+'" style="width:100%;min-height:'+(sec.key==='hmua'?'40px':'64px')+';padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="'+placeholders[sec.key]+'">'+escHtml(p[sec.key]||'')+'</textarea>'+
     '</div>';
   }).join('');
   openModal(
-    '<h3 style="margin:0 0 2px;">💄 '+escHtml(t.client||'HMU Prep')+'</h3>'+
-    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">'+escHtml(p.footer||('Due '+String(t.due||'').slice(0,10)))+'</div>'+
+    '<h3 style="margin:0 0 2px;">📸 '+escHtml(t.client||'Photographer Session')+'</h3>'+
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">'+escHtml(p.footer||('Due '+dueStr))+'</div>'+
     boxes+
     '<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:4px;flex-wrap:wrap;">'+
       '<label style="font-size:11px;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="hmu-done" '+(t.completed||t.stage==='delivered'?'checked':'')+' style="accent-color:var(--teal);width:16px;height:16px;"> Prep complete</label>'+
@@ -3073,6 +3087,7 @@ function saveHmuDetail(id){
   if(!t) return;
   var p = hmuParseNotes(t.notes);
   var vals = {
+    hmua:  document.getElementById('hmu-hmua').value.trim(),
     peg:   document.getElementById('hmu-peg').value.trim(),
     files: document.getElementById('hmu-files').value.trim(),
     buy:   document.getElementById('hmu-buy').value.trim(),
@@ -3081,15 +3096,16 @@ function saveHmuDetail(id){
   t.notes = hmuBuildNotes(vals, p.footer);
   var done = document.getElementById('hmu-done').checked;
   if(done){ t.stage='delivered'; t.completed = t.completed || new Date().toISOString().slice(0,10); }
-  else if(vals.peg||vals.files||vals.buy||vals.other){ if(t.stage==='new') t.stage='inprogress'; t.completed=''; }
+  else if(vals.hmua||vals.peg||vals.files||vals.buy||vals.other){ if(t.stage==='new') t.stage='inprogress'; t.completed=''; }
   t.updated = new Date().toISOString().slice(0,10);
+  t.updatedAt = t.updated;
   saveTasks();
   if(typeof queueSync==='function') queueSync('saveTask', t);
   else if(typeof gasCall==='function') gasCall('saveTask', t).catch(function(){});
   closeModal();
   renderHmuCalendar();
   hmuUpdateBadge();
-  notify('💾 HMU prep saved for '+(t.client||''),'success');
+  notify('💾 Session prep saved for '+(t.client||''),'success');
 }
 
 // Badge refresh after every data load + on start
