@@ -870,7 +870,7 @@ function render(){
   renderWorkloadStrip();
   renderWeekDonePill();
   renderStaffLegend();
-  slUpdateBadge();
+  if (typeof slUpdateBadge === 'function') slUpdateBadge();
   renderInventory();
   if(CUR_VIEW === 'board') renderKanban();
   else renderList();
