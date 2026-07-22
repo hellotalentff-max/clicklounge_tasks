@@ -678,6 +678,7 @@ async function syncAll(){
       updateClientCount();
       updateLastSync();
       render();
+      refreshSendLinkIfActive();
     } else {
       notify('Sync failed: '+(r.error||'Unknown'),'error');
     }
@@ -2868,6 +2869,11 @@ function updateClientCount(){
   if(el) el.textContent = CLIENTS.length+' clients synced';
 }
 
+function refreshSendLinkIfActive(){
+  var sec = document.getElementById('section-sendlink');
+  if(sec && sec.style.display !== 'none') renderSendLinkTab();
+}
+
 function updateLastSync(){
   var el = document.getElementById('last-sync');
   if(el){
@@ -2949,6 +2955,7 @@ async function silentSync(){
         updateClientCount();
       }
       if(changed) render();
+      refreshSendLinkIfActive();
       updateLastSync();
     }
   }catch(e){}
