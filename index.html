@@ -249,6 +249,7 @@ select.sinput{appearance:auto;}
         <option value="today">📅 Today</option>
         <option value="week">This week</option>
         <option value="pending">All pending</option>
+        <option value="upcoming">📆 Upcoming bookings</option>
         <option value="sent">✓ Sent</option>
       </select>
       <button class="btn btn-sm btn-outline" onclick="openNewSendLink()">+ Manual</button>
@@ -661,6 +662,7 @@ async function syncAll(){
 
       // 4. Acknowledgements
       if(Array.isArray(r.acknowledgements)){
+        slSetBookings(r.acknowledgements);
         r.acknowledgements.forEach(function(a){
           var key = (a.fbName||'').trim().toLowerCase();
           if(key && !clientMap[key]){
@@ -2935,6 +2937,7 @@ async function silentSync(){
         }
       }
       if(Array.isArray(r.registrations)) slSetRegistrations(r.registrations);
+      if(Array.isArray(r.acknowledgements)) slSetBookings(r.acknowledgements);
       if(Array.isArray(r.clients) || Array.isArray(r.registrations) || Array.isArray(r.transactions) || Array.isArray(r.acknowledgements)){
         var clientMap = {};
         if(Array.isArray(r.clients)) r.clients.forEach(function(c){ var k=(c.fbName||'').trim().toLowerCase(); if(k) clientMap[k]=c; });
@@ -2967,7 +2970,9 @@ document.addEventListener('visibilitychange', function(){
 //  📤 SEND LINK TAB — auto-populated from registrations
 // ════════════════════════════════════════════════════════════
 var SL2_REG = [];
+var SL2_BOOKINGS = [];
 function slSetRegistrations(regs){ if(Array.isArray(regs)) SL2_REG = regs; slUpdateBadge(); }
+function slSetBookings(acks){ if(Array.isArray(acks)) SL2_BOOKINGS = acks; }
 function slUpdateBadge(){
   var b = document.getElementById('sb-sendlink-badge');
   if(!b) return;
@@ -2985,6 +2990,7 @@ function renderSendLinkTab(){
   if(!box) return;
   var when = (document.getElementById('sl2-when')||{}).value || 'today';
   var today = todayStr();
+  if(when==='upcoming'){ renderUpcomingBookings(box, today); return; }
   var slByClient = {};
   (TASKS||[]).filter(function(t){ return t.type==='sendlink' && !t.archived; }).forEach(function(t){
     slByClient[String(t.client||'').toLowerCase()] = t;
@@ -3044,6 +3050,45 @@ function renderSendLinkTab(){
         '<input type="url" id="'+slug+'-link" placeholder="Paste Google Drive link…" value="'+escHtml(x.driveLink)+'" style="flex:1;min-width:180px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;">'+
         '<button class="btn btn-gold" onclick="sl2Send(\''+encodeURIComponent(x.name)+'\',\''+encodeURIComponent(x.email)+'\',\''+slug+'\')" '+(hasEmail?'':'disabled')+'>📤 Send</button>'+
         '<button class="btn btn-outline" onclick="sl2MarkAirdrop(\''+encodeURIComponent(x.name)+'\',\''+encodeURIComponent(x.email)+'\',\''+slug+'\')" title="Mark as delivered in person via AirDrop">📱 Sent via AirDrop</button>'+
+      '</div></div>';
+  }).join('');
+}
+function renderUpcomingBookings(box, today){
+  var clientEmailByName = {};
+  (CLIENTS||[]).forEach(function(c){
+    var k = String(c.fbName||'').trim().toLowerCase();
+    if(k && c.email) clientEmailByName[k] = c.email;
+  });
+  var seen = {};
+  var rows = (SL2_BOOKINGS||[]).filter(function(a){
+    var d = String(a.bookDate||'').slice(0,10);
+    var st = String(a.status||'').toLowerCase();
+    return d >= today && st !== 'cancelled';
+  }).filter(function(a){
+    var k = String(a.fbName||'').trim().toLowerCase()+'|'+String(a.bookDate||'').slice(0,10);
+    if(!k || seen[k]) return false;
+    seen[k] = true;
+    return true;
+  }).sort(function(a,b){
+    return String(a.bookDate||'').localeCompare(String(b.bookDate||''));
+  });
+  if(!rows.length){
+    box.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted);">'+
+      '<div style="font-size:36px;margin-bottom:8px;">📆</div>'+
+      '<div style="font-size:13px;">No upcoming bookings.</div></div>';
+    return;
+  }
+  box.innerHTML = rows.map(function(a){
+    var name = String(a.fbName||'').trim();
+    var email = a.email || clientEmailByName[name.toLowerCase()] || '';
+    var hasEmail = !!email;
+    var d = String(a.bookDate||'').slice(0,10);
+    var dLabel = d===today ? 'Today' : d;
+    return '<div style="background:var(--white);border:1px solid var(--border);border-left:4px solid var(--teal);border-radius:12px;padding:14px;margin-bottom:10px;">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'+
+        '<div><div style="font-weight:800;font-size:14px;">'+escHtml(name)+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+escHtml(a.service||'')+' · 📅 '+escHtml(dLabel)+(a.timeSlot?' · '+escHtml(a.timeSlot):'')+'</div></div>'+
+        '<div style="font-size:11px;color:'+(hasEmail?'var(--muted)':'var(--danger)')+';">'+(hasEmail?'📧 '+escHtml(email):'⚠ no email on file')+'</div>'+
       '</div></div>';
   }).join('');
 }
