@@ -2989,17 +2989,23 @@ function renderSendLinkTab(){
   (TASKS||[]).filter(function(t){ return t.type==='sendlink' && !t.archived; }).forEach(function(t){
     slByClient[String(t.client||'').toLowerCase()] = t;
   });
+  var clientEmailByName = {};
+  (CLIENTS||[]).forEach(function(c){
+    var k = String(c.fbName||'').trim().toLowerCase();
+    if(k && c.email) clientEmailByName[k] = c.email;
+  });
   var rows = SL2_REG.map(function(r){
     var name = String(r.fbName||'').trim();
     var existing = slByClient[name.toLowerCase()];
-    return { name:name, email:r.email||(existing&&existing.clientEmail)||'', date:String(r.date||'').slice(0,10),
+    var email = r.email || (existing&&existing.clientEmail) || clientEmailByName[name.toLowerCase()] || '';
+    return { name:name, email:email, date:String(r.date||'').slice(0,10),
       task:existing||null, sent:!!(existing&&(existing.stage==='delivered'||existing.driveLinkSentDate)),
       driveLink:existing?existing.driveLink||'':'' };
   });
   (TASKS||[]).filter(function(t){ return t.type==='sendlink' && !t.archived; }).forEach(function(t){
     var nm = String(t.client||'').toLowerCase();
     if(!rows.some(function(x){ return x.name.toLowerCase()===nm; })){
-      rows.push({ name:t.client||'', email:t.clientEmail||'', date:String(t.dueDate||t.createdAt||'').slice(0,10),
+      rows.push({ name:t.client||'', email:t.clientEmail||clientEmailByName[nm]||'', date:String(t.dueDate||t.createdAt||'').slice(0,10),
         task:t, sent:(t.stage==='delivered'||t.driveLinkSentDate), driveLink:t.driveLink||'' });
     }
   });
