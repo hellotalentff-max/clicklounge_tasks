@@ -1021,140 +1021,6 @@ function renderStaffLegend(){
     '<button onclick="openColorPicker()" style="margin-left:auto;background:transparent;border:1px dashed var(--border);color:var(--muted);font-size:10px;padding:3px 9px;border-radius:12px;cursor:pointer;">🎨 Customize Colors</button>';
 }
 
-// ── SEND LINK QUEUE — separate section for day-of-session deliveries ──
-var SENDLINK_COLLAPSED = false;
-
-function renderSendLinkSection(){
-  var section = document.getElementById('sendlink-section');
-  if(!section) return;
-  var allSendlinks = (TASKS||[]).filter(function(t){ return t.type === 'sendlink' && !t.archived; });
-  // Show the badge with open count
-  var openCount = allSendlinks.filter(function(t){ return t.stage !== 'delivered'; }).length;
-  // Auto-hide the whole panel when there's nothing to deliver — reduces clutter
-  section.style.display = openCount > 0 ? '' : 'none';
-  if(openCount === 0) return;
-  var badge = document.getElementById('sendlink-count-badge');
-  if(badge){ badge.textContent = openCount; badge.style.background = openCount?'var(--gold)':'var(--muted)'; }
-
-  // Populate staff filter dropdown
-  var staffSel = document.getElementById('sendlink-staff-filter');
-  if(staffSel){
-    var currentStaff = staffSel.value;
-    var allStaff = TC_STAFF.map(function(s){ return s.name; });
-    allSendlinks.forEach(function(t){
-      if(t.assignedTo && allStaff.indexOf(t.assignedTo) === -1) allStaff.push(t.assignedTo);
-    });
-    allStaff.sort();
-    staffSel.innerHTML = '<option value="">All staff</option>' +
-      '<option value="__unassigned">— Unassigned —</option>' +
-      allStaff.map(function(n){
-        var c = staffColor(n);
-        return '<option value="'+escHtml(n)+'" style="background:'+c.bg+';color:'+c.fg+';">'+escHtml(n)+'</option>';
-      }).join('');
-    staffSel.value = currentStaff;
-    // Color the dropdown itself based on selected staff for visual feedback
-    if(currentStaff && currentStaff !== '__unassigned'){
-      var sc = staffColor(currentStaff);
-      staffSel.style.background = sc.bg;
-      staffSel.style.color = sc.fg;
-      staffSel.style.fontWeight = '600';
-    } else {
-      staffSel.style.background = '#fff';
-      staffSel.style.color = '';
-      staffSel.style.fontWeight = '';
-    }
-  }
-  var staffFilter = staffSel ? staffSel.value : '';
-
-  // Always show section so users can add the first send-link
-  section.style.display = '';
-
-  var listEl = document.getElementById('sendlink-list');
-  if(SENDLINK_COLLAPSED){ listEl.innerHTML = ''; return; }
-
-  var filter = (document.getElementById('sendlink-filter')||{}).value || 'today';
-  var today = todayStr();
-  var weekAhead = new Date(); weekAhead.setDate(weekAhead.getDate()+7);
-  var weekStr = weekAhead.toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
-
-  var tasks = allSendlinks.slice();
-  // Apply staff filter first
-  if(staffFilter === '__unassigned'){
-    tasks = tasks.filter(function(t){ return !t.assignedTo; });
-  } else if(staffFilter){
-    tasks = tasks.filter(function(t){ return t.assignedTo === staffFilter; });
-  }
-  if(filter === 'today'){
-    tasks = tasks.filter(function(t){ return t.stage !== 'delivered' && (t.dueDate === today || (!t.dueDate)); });
-  } else if(filter === 'overdue'){
-    tasks = tasks.filter(function(t){ return t.stage !== 'delivered' && t.dueDate && t.dueDate < today; });
-  } else if(filter === 'upcoming'){
-    tasks = tasks.filter(function(t){ return t.stage !== 'delivered' && t.dueDate && t.dueDate > today && t.dueDate <= weekStr; });
-  } else if(filter === 'open'){
-    tasks = tasks.filter(function(t){ return t.stage !== 'delivered'; });
-  } else if(filter === 'done'){
-    tasks = tasks.filter(function(t){ return t.stage === 'delivered'; });
-  }
-
-  // Sort: overdue first (oldest due first), then today, then upcoming, then done at bottom
-  tasks.sort(function(a,b){
-    if(a.stage === 'delivered' && b.stage !== 'delivered') return 1;
-    if(b.stage === 'delivered' && a.stage !== 'delivered') return -1;
-    var da = a.dueDate || '9999-12-31';
-    var db = b.dueDate || '9999-12-31';
-    return da.localeCompare(db);
-  });
-
-  if(!tasks.length){
-    var emptyMsg = filter==='today' ? '✨ No deliveries needed today.' :
-                   filter==='overdue' ? '✓ No overdue send-links.' :
-                   filter==='done' ? 'No deliveries marked sent yet.' :
-                   'Nothing matches this filter.';
-    listEl.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:14px;text-align:center;background:#fff;border-radius:8px;">'+emptyMsg+'</div>';
-    return;
-  }
-
-  listEl.innerHTML = tasks.map(function(t){
-    var isOverdue = t.dueDate && t.dueDate < today && t.stage !== 'delivered';
-    var isToday = t.dueDate === today && t.stage !== 'delivered';
-    var isDone = t.stage === 'delivered' || t.done;
-    var sc = staffColor(t.assignedTo);
-    var bgRow = isDone ? '#f8faf9' : isOverdue ? 'rgba(192,84,74,0.06)' : isToday ? '#fff' : '#fff';
-    var dueLabel = '';
-    if(t.dueDate){
-      if(t.dueDate === today) dueLabel = '<span style="color:var(--gold);font-weight:700;">📅 TODAY</span>';
-      else if(isOverdue){
-        var days = Math.floor((new Date(today)-new Date(t.dueDate))/(1000*60*60*24));
-        dueLabel = '<span style="color:var(--danger);font-weight:700;">⚠ '+days+'d overdue</span>';
-      } else {
-        dueLabel = '<span style="color:var(--muted);">📅 '+t.dueDate+'</span>';
-      }
-    }
-    return '<div onclick="openTaskDetail(\''+t.id+'\')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:'+bgRow+';border:1px solid var(--border);border-left:4px solid '+(t.assignedTo?sc.bg:'#d0d0d0')+';border-radius:8px;margin-bottom:6px;cursor:pointer;'+(isDone?'opacity:.55;':'')+'">'+
-      '<input type="checkbox" class="tc-check" '+(isDone?'checked':'')+' onclick="event.stopPropagation();toggleTaskDone(\''+t.id+'\',this.checked);" title="Mark sent">'+
-      staffAvatar(t.assignedTo, 26)+
-      '<div style="flex:1;min-width:0;'+(isDone?'text-decoration:line-through;':'')+'">'+
-        '<div style="font-size:12px;font-weight:600;color:var(--slate);">📤 '+escHtml(t.client||'(no client)')+(t.title?' — '+escHtml(t.title):'')+'</div>'+
-        '<div style="font-size:10px;color:var(--muted);margin-top:1px;">'+
-          (t.assignedTo?escHtml(t.assignedTo)+' · ':'')+
-          dueLabel+
-          (t.completedAt?' · ✓ Sent '+fmtTs(t.completedAt):'')+
-        '</div>'+
-      '</div>'+
-      (t.driveLink ? '<a href="'+escHtml(t.driveLink)+'" target="_blank" onclick="event.stopPropagation()" class="btn btn-sm btn-teal" style="text-decoration:none;padding:5px 10px;font-size:10px;flex-shrink:0;">📂 Drive</a>' : '')+
-      (!isDone && t.driveLink ? '<button onclick="event.stopPropagation();sendDriveLink(\''+t.id+'\')" class="btn btn-sm btn-gold" style="padding:5px 10px;font-size:10px;flex-shrink:0;">📤 Send</button>' : '')+
-    '</div>';
-  }).join('');
-}
-
-function toggleSendLinkCollapsed(){
-  SENDLINK_COLLAPSED = !SENDLINK_COLLAPSED;
-  var btn = document.getElementById('sendlink-collapse-btn');
-  if(btn) btn.textContent = SENDLINK_COLLAPSED ? '⌄ Expand' : '⌃ Collapse';
-  renderSendLinkSection();
-  renderInventory();
-}
-
 function openNewSendLink(){
   // Open new task modal pre-set to sendlink type, due today
   openTaskDetail(null);
@@ -3068,6 +2934,7 @@ async function silentSync(){
           changed = true;
         }
       }
+      if(Array.isArray(r.registrations)) slSetRegistrations(r.registrations);
       if(Array.isArray(r.clients) || Array.isArray(r.registrations) || Array.isArray(r.transactions) || Array.isArray(r.acknowledgements)){
         var clientMap = {};
         if(Array.isArray(r.clients)) r.clients.forEach(function(c){ var k=(c.fbName||'').trim().toLowerCase(); if(k) clientMap[k]=c; });
@@ -3179,6 +3046,7 @@ async function sl2Send(nameEnc, emailEnc, slug){
   if(!link || !/^https?:\/\//.test(link)){ notify('Paste a valid Google Drive link first','error'); return; }
   var btn=event.target; if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
   var t=(TASKS||[]).find(function(x){ return x.type==='sendlink' && String(x.client||'').toLowerCase()===name.toLowerCase(); });
+  var wasNew = !t;
   if(!t){
     var now=nowTs();
     t={ id:uid(), type:'sendlink', title:'Send photos — '+name, client:name, clientEmail:email,
@@ -3191,7 +3059,7 @@ async function sl2Send(nameEnc, emailEnc, slug){
     var result=await gasCall('sendLinkEmail',{ email:email, clientName:name, driveLink:link, taskTitle:'Your photos', taskId:t.id, sentBy:'Send Link Tab' });
     if(result && result.ok){
       t.driveLinkSentDate=todayStr(); t.stage='delivered'; t.completedAt=nowTs();
-      pushTask(t,false);
+      pushTask(t,wasNew);
       notify('📤 Photos sent to '+email,'success');
       renderSendLinkTab(); slUpdateBadge();
     } else { notify('Send failed: '+((result&&result.error)||'unknown'),'error'); if(btn){ btn.disabled=false; btn.textContent='📤 Send'; } }
