@@ -2583,6 +2583,8 @@ function openTaskDetail(id){
       '<div class="field"><label>Assigned To</label>'+
         '<select id="td-assigned" class="sinput">'+staffOpts+'</select></div>'+
     '</div>'+
+    '<div class="field" id="td-photos-group" style="display:'+((t&&t.type==='editing')?'':'none')+';"><label>📸 Photos for Editing</label>'+
+      '<textarea id="td-photos" class="sinput" rows="3" style="resize:vertical;" placeholder="List file names, Drive folder link, or which shots the client picked for editing…">'+escHtml(t?t.photosForEditing||'':'')+'</textarea></div>'+
     '<div class="field"><label>Google Drive Link</label>'+
       '<div style="display:flex;gap:8px;">'+
         '<input type="url" id="td-drive" class="sinput" value="'+escHtml(t?t.driveLink||'':'')+'" placeholder="https://drive.google.com/..." style="flex:1;">'+
@@ -2614,6 +2616,14 @@ function openTaskDetail(id){
     }
     // Show client info if editing existing task
     showTaskClientInfo();
+    // Toggle "Photos for Editing" field based on task type
+    var typeSel = document.getElementById('td-type');
+    var photosGroup = document.getElementById('td-photos-group');
+    if(typeSel && photosGroup){
+      typeSel.addEventListener('change', function(){
+        photosGroup.style.display = typeSel.value==='editing' ? '' : 'none';
+      });
+    }
     // Wire send link button
     var sendBtn = document.getElementById('td-send-link');
     if(sendBtn) sendBtn.addEventListener('click', function(){ sendDriveLink(t.id); });
@@ -2708,6 +2718,7 @@ function saveTask(existingId){
   var assigned = (document.getElementById('td-assigned').value||'').trim();
   var driveLink= (document.getElementById('td-drive').value||'').trim();
   var notes    = (document.getElementById('td-notes').value||'').trim();
+  var photosForEditing = (document.getElementById('td-photos')?.value||'').trim();
 
   // Title is now optional — Type serves as the standard title
   // If no title given, fall back to type label
@@ -2725,7 +2736,7 @@ function saveTask(existingId){
       var nowDelivered = (stage === 'delivered');
       t.title = title; t.client = client; t.type = type; t.stage = stage;
       t.dueDate = dueDate; t.due = dueDate; t.priority = priority; t.assignedTo = assigned;
-      t.driveLink = driveLink; t.notes = notes; t.updatedAt = now;
+      t.driveLink = driveLink; t.notes = notes; t.photosForEditing = photosForEditing; t.updatedAt = now;
       // Track completion timestamp
       if(nowDelivered && !wasDelivered) t.completedAt = now;
       else if(!nowDelivered && wasDelivered) t.completedAt = '';
@@ -2738,7 +2749,7 @@ function saveTask(existingId){
     var task = {
       id: uid(), title: title, client: client, type: type, stage: stage,
       dueDate: dueDate, priority: priority, assignedTo: assigned,
-      driveLink: driveLink, notes: notes,
+      driveLink: driveLink, notes: notes, photosForEditing: photosForEditing,
       createdAt: now, updatedAt: now,
       completedAt: (stage === 'delivered' ? now : ''),
       archived: false, due: dueDate
