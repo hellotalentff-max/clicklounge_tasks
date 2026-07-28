@@ -3229,7 +3229,10 @@ function hmuParseNotes(notes){
   var s = String(notes||'');
   // Include retired markers (e.g. the removed "File Names for Editing") as
   // section boundaries so old tasks don't bleed removed content into the peg.
-  var ALL_MARKERS = HMU_SECTIONS.map(function(sec){ return sec.marker; })
+  // Boundaries search for icon+marker (not just marker text) so a section's
+  // body doesn't swallow the NEXT section's leading icon — markers are always
+  // written as "<icon> <MARKER TEXT>" by hmuBuildNotes.
+  var ALL_MARKERS = HMU_SECTIONS.map(function(sec){ return sec.icon + ' ' + sec.marker; })
     .concat(['FILE NAMES FOR EDITING:']);
   var boundaries = ALL_MARKERS.map(function(m){ return { m:m, i:s.indexOf(m) }; }).filter(function(x){ return x.i > -1; });
   var foot = s.indexOf('— Package:');
@@ -3246,7 +3249,7 @@ function hmuParseNotes(notes){
     body = body.split('\n').filter(function(l){
       var t = l.trim();
       return t && !(t.startsWith('(') && t.endsWith(')'));
-    }).join('\n').replace(/^[💄🗂🛒📝📌]\s*/,'').trim();
+    }).join('\n').replace(/^[💄🗂🛒📝📌]\s*/u,'').trim();
     out[sec.key] = body;
   });
   if(boundaries.length === 0 && s.trim() && s.indexOf('— Package:') !== 0) out.other = s.replace(/— Package:.*$/s,'').trim();
