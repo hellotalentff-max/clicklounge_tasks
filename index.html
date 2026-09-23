@@ -2955,14 +2955,31 @@ var JOB = {
     { m:['radiant mama','mama love'], edits:4, digital:'all soft copies',
       other:['Set up 2 shot layouts', 'Put out the free outfit and studio props'] },
 
-    // Bookable but the site documents no inclusions for these
-    { m:['luxe mode','fur coat'], unknown:true, hmu:'HMU is part of this package — book the HMUA, client arrives 1.5 hrs early',
-      other:['Put out the fur coat'] },
+    // From the package posters (LUXE MODE.png, img_solo_promo.png,
+    // img_couple_promo.png, img_popreveal_content.png) — these inclusions
+    // aren't in the site's HTML, only in the artwork.
+    { m:['luxe mode','fur coat'], edits:5, digital:'all digital copies',
+      hmu:'Free basic hair and makeup — book the HMUA',
+      other:['Put out the fur coat','Set up 2 light styles','Prepare the rack for 2 outfits',
+             'Light edits on the selected photos'] },
+    { m:['couple styleshots promo'], edits:6, digital:'all soft copies',
+      hmu:'Free basic hair and makeup for one — book the HMUA',
+      other:['Set up 2 light styles','Put out the free available outfit'] },
+    { m:['promo styleshots','promo session'], edits:3, digital:'20 soft copies of the best shots',
+      hmu:'Free basic hair and makeup — book the HMUA',
+      other:['Set up 2 light styles','Put out the free available outfit',
+             'If they paid the +₱500 upgrade: 5 edits, 2 outfit changes and all soft copies',
+             'If they paid the +₱1,500 upgrade: 8 edits, 3 outfit changes, all soft copies and an 8×24in wall portrait'] },
+    { m:['pop reveal'], unknown:'edits', digital:'all digital copies',
+      prints:['4 Minis, 2 Besties and 2 strips'],
+      other:['Confirm the reveal colour and the peg with the client',
+             'Check they sent the gender result at least 5 days before',
+             'Put out the balloons, washable paint and studio props',
+             'If they paid the +₱1,000 add-on: unedited BTS clips the same day, edited BTS in 5–7 days, and one 5R photo in a 7×9in frame'] },
+
+    // Still no inclusion list anywhere for this one
     { m:['angelic muse'], unknown:true, hmu:'HMU is part of this package — book the HMUA, client arrives 1.5 hrs early',
       other:['Put out the angel wings'] },
-    { m:['pop reveal'], unknown:true, other:['Confirm the reveal colour and the theme with the client'] },
-    { m:['promo styleshots','couple styleshots promo','promo session'], unknown:true,
-      hmu:'HMU is part of this promo — book the HMUA, client arrives 1.5 hrs early' },
 
     // ── Candid Kids ──
     { m:['candid kids all star','all star'], edits:3, digital:'all digital copies',
