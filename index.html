@@ -231,6 +231,7 @@ select.sinput{appearance:auto;}
     <input type="text" id="cj-search" oninput="cjSetSearch(this.value)" placeholder="🔍 Client or package…"
       style="min-width:180px;padding:8px 14px;border:1.5px solid var(--border);border-radius:20px;font-size:12px;">
     <button class="btn btn-sm btn-outline" onclick="cjToggleDone()" id="cj-done-btn">Show handed over</button>
+    <button class="btn btn-sm btn-teal" onclick="cjOpenAdd()" id="cj-add-btn">+ New job</button>
   </div>
   <p style="margin:0 0 14px;font-size:11.5px;color:var(--muted);">
     One card per confirmed booking, with everything that package owes the client. Tick things off as you finish them.
@@ -2880,6 +2881,577 @@ function llPanel(t){
     rows+
   '</div>';
 }
+
+// ================================================================
+//  📦 PACKAGE DELIVERABLES — lifted verbatim from ClientJobs.gs
+//  ----------------------------------------------------------------
+//  This is the same table and the same functions the Apps Script uses
+//  to work out what a package owes a client. It lives here too so a
+//  job added by hand gets an identical checklist to one raised
+//  automatically on confirmation.
+//
+//  ⚠ If you change the packages in ClientJobs.gs, change them here as
+//    well — the two are meant to stay word for word the same.
+// ================================================================
+var JOB = {
+  TAG:   '📋 CLIENT JOB — to accomplish',
+  TYPE:  'clientjob',
+  COLOR: '#ffd9a6',
+
+  // How far back the backfill reaches, in days before today.
+  //   0  = today and future shoots only (the default)
+  //   7  = also pick up last week's shoots, which may still owe edits
+  //  -1  = no limit, every booking on the sheet
+  // Only the backfill uses this. A booking confirmed today always raises
+  // its job, whatever date the shoot is, and a job already on the board
+  // stays there after the shoot — that's when the editing happens.
+  BACKFILL_DAYS_BACK: 0,
+
+  // Everything owed on every session, whatever the package
+  CLOSING: [
+    'Cull and upload the gallery',
+    'Send the client their photos / download link'
+  ],
+
+  // ── The deliverables table ──────────────────────────────────
+  // `m` is the list of lowercase fragments to look for in the package
+  // name; the entry whose fragment is LONGEST wins, so "candid kids all
+  // star" beats "candid kids". Every number here is what the website
+  // states. Where the site states nothing, `unknown: true` says so.
+  //   edits   — number of edited photos owed
+  //   digital — what softcopy the client gets
+  //   prints  — print-outs, in the studio's own wording
+  //   frames  — frames to mount
+  //   hmu     — hair & makeup to book
+  //   cards   — ClickCards to hand over
+  //   other   — anything else tangible
+  P: [
+    // ── Self Shoot — Basic ──
+    { m:['snapshot selfie'], edits:0, digital:'8 digital copies', prints:['2 Besties prints'] },
+    { m:['tribe time'],      edits:0, digital:'10 digital copies', prints:['4 Besties prints'] },
+    { m:['crowd cam'],       edits:0, digital:'all digital copies', prints:['6 Besties prints'] },
+    { m:['crew captures'],   edits:0, digital:'all digital copies', prints:['8 Besties prints'] },
+
+    // ── Self Shoot — Birthday (all include the props set and the gift spinner) ──
+    { m:['frenzy snaps'], edits:0, digital:'all digital copies', prints:['4 Minis prints'],
+      other:['Set out the birthday sash, headband and crown', 'Check for a BDAY gift code and honour the prize'] },
+    { m:['party clicks'], edits:0, digital:'all digital copies', prints:['4 Besties prints'], frames:['5R frame (free with this package)'],
+      other:['Set out the birthday sash, headband, crown and faux cake', 'Check for a BDAY gift code and honour the prize'] },
+    { m:['click capture'], edits:0, digital:'all digital copies', prints:['8 Besties prints'], frames:['8R framed print (free with this package)'],
+      other:['Set out the birthday sash, headband, crown and faux cake', 'Check for a BDAY gift code and honour the prize'] },
+
+    // ── Photographer sessions ──
+    { m:['couple styleshots'], edits:5, digital:'20 digital copies of the best shots',
+      other:['Edit lead time on this package is 10 days or more — tell the client the date', 'Give the free 5 mins self shoot'] },
+    { m:['styleshots'], edits:3, digital:'20 digital copies of the best shots',
+      other:['Edit lead time on this package is up to 3 days — tell the client the date'] },
+
+    { m:['radiant mama - glowing mom','glowing mom'], edits:8, digital:'all digital copies',
+      frames:['1pc 8R in a Double Glass Frame'], hmu:'Free hair and makeup for Mom — book the HMUA, client arrives 1.5 hrs early',
+      other:['Set up 2 set designs and 4 shot layouts', 'Put out the satin drape and crown'] },
+    { m:['radiant mama','mama love'], edits:4, digital:'all soft copies',
+      other:['Set up 2 shot layouts', 'Put out the free outfit and studio props'] },
+
+    // Bookable but the site documents no inclusions for these
+    { m:['luxe mode','fur coat'], unknown:true, hmu:'HMU is part of this package — book the HMUA, client arrives 1.5 hrs early',
+      other:['Put out the fur coat'] },
+    { m:['angelic muse'], unknown:true, hmu:'HMU is part of this package — book the HMUA, client arrives 1.5 hrs early',
+      other:['Put out the angel wings'] },
+    { m:['pop reveal'], unknown:true, other:['Confirm the reveal colour and the theme with the client'] },
+    { m:['promo styleshots','couple styleshots promo','promo session'], unknown:true,
+      hmu:'HMU is part of this promo — book the HMUA, client arrives 1.5 hrs early' },
+
+    // ── Candid Kids ──
+    { m:['candid kids all star','all star'], edits:3, digital:'all digital copies',
+      prints:['1 Solo, 2 Besties and 4 Minis prints'], frames:['5R on a Double Glass Frame'],
+      other:['Send the free digital invitation'] },
+    { m:['candid kids twogether','twogether'], edits:0, digital:'all digital copies',
+      prints:['1 Solo, 2 Besties and 4 Minis prints'],
+      other:['Client picks Option 1 (2 edited pics on 2 digital backdrops) or Option 2 (a set design) — confirm which',
+             'If Option 1: edit the 2 pics onto the digital backdrops'] },
+    { m:['candid kids sweet kid','sweet kid'], edits:0, digital:'all digital copies', prints:['4 Minis prints'] },
+    { m:['candid kids onederful','onederful'], edits:0, digital:'all digital copies', prints:['4 Minis prints'] },
+    { m:['candid kids'], weak:true, edits:0, digital:'all digital copies', prints:['4 Minis prints'],
+      other:['Confirm which Candid Kids tier this is — All Star adds 3 edits, a 5R frame and the digital invitation'] },
+
+    // ── Family ──
+    { m:['fam story'], edits:0, digital:'all digital copies',
+      prints:['2 Solo, 8 Minis and 4 Besties prints'], frames:['Premium Acrylic Frame 8×24in'] },
+    { m:['fam vibes','famvibes'], edits:0, digital:'all digital copies',
+      prints:['4 Minis, 2 Besties prints and 2 strips'], frames:['5R framed picture'] },
+    { m:['fam bam','fambam'], edits:0, digital:'all digital copies',
+      prints:['1 Solo, 4 Minis and 2 Besties prints'] },
+    { m:['family portraits'], weak:true, edits:0, digital:'all digital copies',
+      prints:['1 Solo, 4 Minis and 2 Besties prints'],
+      other:['Confirm which Family tier this is — Fam Vibes and Fam Story add prints and a frame'] },
+
+    // ── Pets ──
+    { m:['pawtraits pawsome','pawsome'], edits:2, digital:'all digital copies',
+      prints:['1 Solo, 2 Besties and 4 Minis prints'], frames:['8R on a Double Glass Frame'],
+      cards:1, other:['Set up the basic pet set design'] },
+    { m:['pawtraits purrfect','purrfect'], edits:0, digital:'all digital copies',
+      prints:['2 Besties and 4 Minis prints'], frames:['5R on a Double Glass Frame'], cards:1 },
+    { m:['pawtraits'], weak:true, edits:0, digital:'all digital copies',
+      prints:['2 Besties and 4 Minis prints'], frames:['5R on a Double Glass Frame'], cards:1,
+      other:['Confirm which PAWtraits tier this is — Pawsome adds 2 edits and an 8R frame'] },
+
+    // ── Graduation (all three: the school emblem is edited in) ──
+    { m:['vip grad glam'], edits:6, digital:'all digital copies',
+      prints:['2 Minis + 1 5R print (grad session)','2 Minis + 1 4R print (group session)'],
+      frames:['1 8R Double Glass Frame'], cards:2,
+      hmu:'Basic hair and makeup included — book the HMUA, client arrives 1.5 hrs early',
+      other:['Edit the school emblem onto the shots (client supplies the file)','Confirm the hood colour'] },
+    { m:['grad-u-click','grad u click'], edits:3, digital:'all digital copies',
+      prints:['4 Minis prints (grad session)','4 Minis prints (group session)'], cards:2,
+      other:['Edit the school emblem onto the shots (client supplies the file)','Confirm the hood colour'] },
+    { m:['cap and gown','cap & gown'], edits:1, digital:'12 digital copies of the best shots',
+      prints:['4 Minis prints'], cards:1,
+      other:['Edit the school emblem onto the shots (client supplies the file)','Confirm the hood colour',
+             'Set out the toga, and the pearl earrings and necklace for women'] },
+
+    // ── Bridal ──
+    { m:['bridal bliss'], unknown:'edits', digital:'all digital copies',
+      prints:['12 Minis and 10 Besties prints'],
+      hmu:'Free HMU for the bride — book the HMUA',
+      cards:1,
+      other:['Put out the veil, crown, bridal sash and faux Bride-To-Be cake',
+             'Shoot and send the free BTS video clips',
+             'Hand over the mini bouquet for the bride',
+             'Hand over the 200 vouchers'] },
+
+    // ── Events ──
+    { m:['studio booth'], unknown:true,
+      other:['Confirm which tier (1hr / 2hr / 3hr) — the 3-hour tier owes a pocket flash drive, 100 prints and 50 4R wooden frames',
+             'Send all high-resolution soft copies','Prepare the free template'] }
+  ],
+
+  // ── Add-ons, matched inside the booking notes ──
+  // Each adds its own line, and the edit ones bump the edit count.
+  X: [
+    { m:'rush', rush:true },
+    // edited-photo add-ons are counted by job_addonEdits_, not here
+    { m:'premium acrylic frame', frame:'Premium Acrylic Frame 8×24in (paid add-on)' },
+    { m:'acrylic frame', frame:'Acrylic frame (paid add-on)' },
+    { m:'double glass frame', frame:'Double Glass Frame (paid add-on)' },
+    { m:'8r framed', frame:'8R framed photo (paid add-on)' },
+    { m:'5r framed', frame:'5R framed photo (paid add-on)' },
+    { m:'5r frame', frame:'5R frame (paid add-on)' },
+    { m:'8r frame', frame:'8R frame (paid add-on)' },
+    { m:'frame', frame:'Frame (paid add-on) — confirm the size' },
+    { m:'a4', print:'A4 print (paid add-on)' },
+    { m:'a5', print:'A5 print (paid add-on)' },
+    { m:'4r print', print:'4R print (paid add-on)' },
+    { m:'8r print', print:'8R print (paid add-on)' },
+    { m:'all digital copies', item:'Unlock all digital copies (paid add-on)' },
+    { m:'digital copy', item:'Unlock the digital copies (paid add-on)' },
+    { m:'digital backdrop', item:'Edit onto the digital backdrop (paid add-on)' },
+    { m:'theme set up', item:'Build the themed set (paid add-on)' },
+    { m:'set design', item:'Set up the basic set design (paid add-on)' },
+    { m:'outfit change', item:'Allow the extra outfit change (paid add-on)' },
+    { m:'balloon', item:'Put out the 32-in number balloon (paid add-on)' },
+    { m:'hmu', hmu:'HMU add-on paid — book the HMUA, client arrives 1.5 hrs early' },
+    { m:'hair and make', hmu:'HMU add-on paid — book the HMUA, client arrives 1.5 hrs early' },
+    { m:'photographer', item:'Assign the photographer (upgrade paid)' },
+    { m:'pet', item:'Pet add-on paid — allow the pet' },
+    { m:'bts', item:'Shoot and send the BTS video clips (paid add-on)' }
+  ]
+};
+
+var JOBLL = {
+  PRINT_MINI: 'Print the Mini Keepsake set — 4 pcs 2×3in + 2 pcs 3×4in',
+  PRINT_8X24: 'Print the 8×24in portrait',
+
+  SESSIONS: {
+    'standard': { edits:0, prep:[] },
+    'styled':   { edits:3, prep:['Book HMUA — basic hair & makeup','Prepare the outfit rack for 1 outfit change'] },
+    'prestige': { edits:5, prep:['Book HMUA — hair and glam makeup look','Prepare the outfit rack for 2 outfit changes'], p8x24:true }
+  },
+  MOODS: {
+    'styleshots':          { edits:0, prep:['Set standard lighting'] },
+    'the coat code':       { edits:0, prep:['Prepare the signature fur coat','Set dark editorial lighting','Set up foil styling'] },
+    'angelic muse':        { edits:0, prep:['Prepare the angel wings','Set celestial lighting','Set up cloud or foil styling'] },
+    'the double prestige': { edits:2, prep:['Prepare the signature fur coat AND the angel wings','Set up both looks — dark editorial and celestial','Set up foil / cloud styling'], pmini:true, p8x24:true }
+  },
+  KEEPSAKES: {
+    'digital':          { edits:0 },
+    'mini keepsake':    { edits:0, pmini:true },
+    'signature wall':   { edits:2, pmini:true, p8x24:true },
+    'prestige acrylic': { edits:3, pmini:true, p8x24:true,
+                          frames:['Mount the 8×24in portrait in the Acrylic Frame with Gold Studs'] }
+  },
+  EXTRAS: [
+    { m:'additional outfit change', item:'Prepare 1 more outfit change' },
+    { m:'rush 24-hour delivery',    item:'⚡ RUSH — deliver within 24 hours of the shoot' },
+    { m:'+15 mins time',            item:'Block 15 extra minutes on the shoot schedule' },
+    { m:'5r framed photo',          item:'Print and frame the 5R photo' },
+    { m:'8r framed photo',          item:'Print and frame the 8R photo' }
+  ]
+};
+
+function job_isLookLab_(service) {
+  return String(service || '').toLowerCase().indexOf('look lab') !== -1;
+}
+
+function job_llPick_(hay, map) {
+  var low = String(hay || '').toLowerCase(), best = null;
+  for (var k in map) {
+    if (map.hasOwnProperty(k) && low.indexOf(k) !== -1 && (!best || k.length > best.length)) best = k;
+  }
+  return best;
+}
+
+function job_lookLab_(service, note) {
+  var label = String(service || '');
+  var after = label.indexOf(':') !== -1 ? label.slice(label.indexOf(':') + 1) : label;
+  var parts = after.split('+');
+
+  var sKey = job_llPick_(parts[0] || '', JOBLL.SESSIONS)  || job_llPick_(after, JOBLL.SESSIONS);
+  var mKey = job_llPick_(parts[1] || '', JOBLL.MOODS)     || job_llPick_(after, JOBLL.MOODS);
+  var kKey = job_llPick_(parts.slice(2).join('+') || '', JOBLL.KEEPSAKES) || job_llPick_(after, JOBLL.KEEPSAKES);
+
+  var S = JOBLL.SESSIONS[sKey], M = JOBLL.MOODS[mKey], K = JOBLL.KEEPSAKES[kKey];
+
+  // The label has to name a session, a mood and a keepsake. If it only says
+  // "The Look Lab" the build was never carried over, and no list can be
+  // derived — say so rather than inventing a short one.
+  if (!S && !M && !K) {
+    return { items: ['⚠️ This booking only says "' + label + '" — the Look Lab build (session + mood + keepsake) ' +
+                     'didn\'t come through. Open the client\'s booking or message and confirm what they picked.',
+                     'Cull and upload the gallery', 'Send the client their photos / download link'],
+             edits: 0, gown: '', known: false };
+  }
+
+  var edits = (S ? S.edits : 0) + (M ? M.edits : 0) + (K ? K.edits : 0);
+  var prep = [], frames = [], pmini = false, p8x24 = false, extras = [];
+
+  [S, M, K].forEach(function (part) {
+    if (!part) return;
+    prep   = prep.concat(part.prep || []);
+    frames = frames.concat(part.frames || []);
+    if (part.pmini) pmini = true;
+    if (part.p8x24) p8x24 = true;
+  });
+
+  var low = String(note || '').toLowerCase();
+  JOBLL.EXTRAS.forEach(function (x) { if (low.indexOf(x.m) !== -1) extras.push(x.item); });
+  edits += job_addonEdits_(note);
+
+  var gown = '';
+  var gm = String(note || '').match(/Gown:\s*([^(·|\n]+)/i);
+  if (gm) gown = gm[1].trim();
+
+  var items = [];
+  prep.forEach(function (x) { items.push(x); });
+  if (gown) items.push('👗 Gown c/o HOR: ' + gown + ' — reserve it and confirm the pick-up and return dates');
+  // A part of the package that isn't in the tables means the page gained an
+  // option this code hasn't been told about — flag it rather than skip it.
+  if (!S || !M || !K) {
+    items.push('⚠️ Part of this build isn\'t recognised (' +
+      (!S ? 'session' : '') + (!M ? (!S ? ', ' : '') + 'mood' : '') +
+      (!K ? ((!S || !M) ? ', ' : '') + 'keepsake' : '') +
+      ') — check the Look Lab page for what it includes.');
+  }
+  items.push(edits > 0 ? 'Edit ' + edits + ' photo' + (edits === 1 ? '' : 's')
+                       : 'Cull and deliver the digital copies');
+  if (pmini) items.push(JOBLL.PRINT_MINI);
+  if (p8x24) items.push(JOBLL.PRINT_8X24);
+  frames.forEach(function (f) { items.push(f); });
+  extras.forEach(function (x) { items.push(x); });
+  items.push('Cull and upload the gallery');
+  items.push('Send the client all their edited photos and digital copies');
+
+  var seen = {}, clean = [];
+  items.forEach(function (i) { var k = i.toLowerCase(); if (!seen[k]) { seen[k] = 1; clean.push(i); } });
+  return { items: clean, edits: edits, gown: gown, known: !!(S && M && K) };
+}
+
+function job_norm_(s) {
+  return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function job_lookup_(service) {
+  var low = job_norm_(service);
+  var best = null, bestLen = 0, weakBest = null, weakLen = 0;
+  for (var i = 0; i < JOB.P.length; i++) {
+    var e = JOB.P[i];
+    for (var j = 0; j < e.m.length; j++) {
+      if (low.indexOf(e.m[j]) === -1) continue;
+      if (e.weak) { if (e.m[j].length > weakLen) { weakBest = e; weakLen = e.m[j].length; } }
+      else if (e.m[j].length > bestLen) { best = e; bestLen = e.m[j].length; }
+    }
+  }
+  return best || weakBest;
+}
+
+function job_addonEdits_(note) {
+  var re = /(?:\+\s*)?(\d+)?\s*(?:addtl|additional|extra)?\s*edited\s+photos?/gi;
+  var total = 0, m;
+  while ((m = re.exec(String(note || ''))) !== null) {
+    total += m[1] ? parseInt(m[1], 10) : 1;
+  }
+  return total;
+}
+
+function job_checklist_(service, notes) {
+  var note = String(notes || '');
+  var low  = note.toLowerCase();
+
+  // The Look Lab builds its package on the fly, so its inclusions come
+  // from the label rather than the table. Handled in this same file, so a
+  // Look Lab booking can't quietly fall through to a generic list.
+  if (job_isLookLab_(service)) {
+    var ll = job_lookLab_(service, note);
+    return { items: ll.items, edits: ll.edits, gown: ll.gown, known: ll.known, pkg: null };
+  }
+
+  var P = job_lookup_(service);
+  var prep = [], prints = [], frames = [], edits = 0, extras = [], rush = false;
+  var hmu = '', cards = 0, digital = '';
+
+  if (P) {
+    edits   = P.edits || 0;
+    digital = P.digital || '';
+    hmu     = P.hmu || '';
+    cards   = P.cards || 0;
+    (P.prints || []).forEach(function (x) { prints.push('Print ' + x); });
+    (P.frames || []).forEach(function (x) { frames.push('Mount the ' + x); });
+    (P.other  || []).forEach(function (x) { prep.push(x); });
+  }
+
+  // ── Add-ons, read out of the booking notes ──
+  var seenX = {};
+  JOB.X.forEach(function (x) {
+    if (low.indexOf(x.m) === -1) return;
+    // don't fire both "frame" and "5r frame" for the same phrase
+    if (x.frame) { if (seenX.frame) return; seenX.frame = 1; frames.push('Mount the ' + x.frame); }
+    if (x.print) prints.push('Print the ' + x.print);
+    if (x.hmu)   { if (!hmu) hmu = x.hmu; }
+    if (x.rush)  rush = true;
+    if (x.item)  extras.push(x.item);
+  });
+  edits += job_addonEdits_(note);
+
+  // 👗 The gown, when one was booked — written into the notes as
+  //    "Gown: Amelia (+₱700)" or "Gown: Amelia (included)"
+  var gown = '';
+  var gm = note.match(/Gown:\s*([^(·|\n]+)/i);
+  if (gm) gown = gm[1].trim();
+
+  // ── Assemble, in the order the studio works through it ──
+  var items = [];
+  if (hmu) items.push('💄 ' + hmu);
+  prep.forEach(function (x) { items.push(x); });
+  if (gown) items.push('👗 Gown c/o HOR: ' + gown + ' — reserve it and confirm the pick-up and return dates');
+
+  if (P && P.unknown === true) {
+    items.push('⚠️ CHECK THE PACKAGE — this one\'s inclusions aren\'t on the website. ' +
+               'Confirm the edits, prints and frames owed before you start.');
+  } else if (P && P.unknown === 'edits') {
+    items.push('⚠️ Confirm how many edited photos this package includes — it isn\'t stated on the website');
+  } else if (!P) {
+    items.push('⚠️ CHECK THE PACKAGE — "' + String(service || '(no package)') + '" isn\'t in the deliverables list. ' +
+               'Confirm what this client is owed, then tell Maan so it can be added.');
+  }
+
+  if (edits > 0) items.push('Edit ' + edits + ' photo' + (edits === 1 ? '' : 's'));
+  prints.forEach(function (x) { items.push(x); });
+  frames.forEach(function (x) { items.push(x); });
+  if (cards > 0) items.push('Hand over ' + cards + ' ClickCard' + (cards === 1 ? '' : 's'));
+  extras.forEach(function (x) { items.push(x); });
+  if (rush) items.push('⚡ RUSH — the client paid for rush editing, deliver ahead of the normal lead time');
+
+  JOB.CLOSING.forEach(function (x) {
+    items.push(x === 'Send the client their photos / download link' && digital
+      ? 'Send the client ' + digital
+      : x);
+  });
+
+  // Drop duplicates, keep the order
+  var seen = {}, clean = [];
+  items.forEach(function (i) { var k = i.toLowerCase(); if (!seen[k]) { seen[k] = 1; clean.push(i); } });
+
+  return { items: clean, edits: edits, gown: gown, known: !!P && P.unknown !== true, pkg: P };
+}
+
+function job_notes_(service, bookDate, timeSlot, notes, chk) {
+  var lines = [JOB.TAG, String(service || '(no package)') +
+    (bookDate ? ' — ' + bookDate : '') + (timeSlot ? ' ' + timeSlot : '')];
+  chk.items.forEach(function (i) { lines.push('[ ] ' + i); });
+  var own = String(notes || '').trim();
+  if (own) lines.push('—', 'From the booking: ' + own);
+  return lines.join('\n');
+}
+
+function job_id_(fbName, bookDate, timeSlot) {
+  var seed = job_norm_(fbName) + '|' + String(bookDate || '') + '|' + String(timeSlot || '');
+  var sum = 0;
+  for (var i = 0; i < seed.length; i++) sum = (sum * 31 + seed.charCodeAt(i)) % 2147483647;
+  return 'cj' + sum.toString(36);
+}
+
+
+// ================================================================
+//  ➕ ADD A JOB BY HAND
+//  ----------------------------------------------------------------
+//  For walk-ins, phone bookings, or anything that never went through
+//  the booking form. Pick the package and the checklist is built from
+//  the same tables the automatic jobs use — the block above is lifted
+//  verbatim from ClientJobs.gs, so a job added here is identical to
+//  one raised on confirmation.
+//
+//  The job id is derived from client + date + time exactly as the
+//  server does it, so if that same booking is confirmed later it
+//  updates this job instead of making a second one.
+// ================================================================
+
+// Every package name the deliverables table knows, for the suggestions list
+function cjKnownPackages(){
+  var names = [];
+  (JOB.P || []).forEach(function(e){
+    (e.m || []).forEach(function(frag){
+      names.push(frag.replace(/\b\w/g, function(c){ return c.toUpperCase(); }));
+    });
+  });
+  ['The Look Lab: Standard + Styleshots + Digital',
+   'The Look Lab: Styled + The Coat Code + Mini Keepsake',
+   'The Look Lab: Prestige + The Double Prestige + Signature Wall'].forEach(function(x){ names.push(x); });
+  // plus anything already used on a real job
+  (TASKS||[]).forEach(function(t){
+    if(llIs(t)){ var p = llParse(t.notes).pkg; if(p) names.push(p.replace(/\s+\u2014.*$/, '')); }
+  });
+  var seen = {}, out = [];
+  names.forEach(function(n){ var k = n.toLowerCase(); if(!seen[k]){ seen[k] = 1; out.push(n); } });
+  return out.sort();
+}
+
+function cjOpenAdd(){
+  var pkgOpts = cjKnownPackages().map(function(n){ return '<option value="'+escHtml(n)+'">'; }).join('');
+  var clientOpts = (CLIENTS||[]).map(function(c){ return c.fbName; })
+    .filter(function(v,i,a){ return v && a.indexOf(v) === i; }).sort()
+    .map(function(n){ return '<option value="'+escHtml(n)+'">'; }).join('');
+
+  openModal(
+    '<h3 style="margin-bottom:4px;">\u2795 New client job</h3>'+
+    '<p style="margin:0 0 16px;font-size:11.5px;color:var(--muted);">'+
+      'For walk-ins and bookings that didn\'t come through the booking form. '+
+      'Pick a package and the checklist fills itself in.</p>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+      '<div class="field"><label>Client name *</label>'+
+        '<input type="text" id="cja-client" class="sinput" list="cja-clients" placeholder="Who is it for?" autocomplete="off">'+
+        '<datalist id="cja-clients">'+clientOpts+'</datalist></div>'+
+      '<div class="field"><label>Package *</label>'+
+        '<input type="text" id="cja-pkg" class="sinput" list="cja-pkgs" placeholder="Start typing\u2026" autocomplete="off"'+
+          ' oninput="cjAddPreview()"></input>'+
+        '<datalist id="cja-pkgs">'+pkgOpts+'</datalist></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+      '<div class="field"><label>Shoot date</label>'+
+        '<input type="date" id="cja-date" class="sinput" value="'+todayStr()+'" onchange="cjAddPreview()"></div>'+
+      '<div class="field"><label>Time <span style="color:var(--muted);font-weight:400;font-size:11px;">(optional)</span></label>'+
+        '<input type="text" id="cja-time" class="sinput" placeholder="e.g. 3:15 PM"></div>'+
+    '</div>'+
+    '<div class="field"><label>Add-ons / notes <span style="color:var(--muted);font-weight:400;font-size:11px;">(optional \u2014 paid frames, rush, gown\u2026)</span></label>'+
+      '<input type="text" id="cja-notes" class="sinput" placeholder="e.g. +Rush Edit Fee, Gown: Amelia" oninput="cjAddPreview()"></div>'+
+    '<div class="field"><label>Anything else to do <span style="color:var(--muted);font-weight:400;font-size:11px;">(optional \u2014 one per line)</span></label>'+
+      '<textarea id="cja-extra" class="sinput" rows="2" style="resize:vertical;" placeholder="Extra tick boxes of your own" oninput="cjAddPreview()"></textarea></div>'+
+    '<div id="cja-preview"></div>'+
+    '<div class="fe" style="justify-content:flex-end;gap:8px;">'+
+      '<button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
+      '<button class="btn btn-teal" onclick="cjAddSave()">\ud83d\udcbe Create job</button>'+
+    '</div>');
+  setTimeout(function(){
+    var el = document.getElementById('cja-client'); if(el) el.focus();
+    cjAddPreview();
+  }, 60);
+}
+
+// What the checklist will look like, updated as they type
+function cjAddPreview(){
+  var box = document.getElementById('cja-preview');
+  if(!box) return;
+  var pkg = (document.getElementById('cja-pkg').value||'').trim();
+  if(!pkg){
+    box.innerHTML = '<div style="background:var(--light);border-radius:8px;padding:12px 14px;margin-bottom:14px;'+
+      'font-size:11.5px;color:var(--muted);">Pick a package to see what gets ticked off.</div>';
+    return;
+  }
+  var chk = cjBuildChecklist(pkg, (document.getElementById('cja-notes').value||''),
+                             (document.getElementById('cja-extra').value||''));
+  box.innerHTML = '<div class="ll-box" style="margin-bottom:14px;">'+
+    '<h4>This job will have '+chk.items.length+' thing'+(chk.items.length===1?'':'s')+' to do</h4>'+
+    chk.items.map(function(i){
+      return '<div class="ll-item"><span style="width:17px;flex-shrink:0;color:#e08a28;">\u2610</span>'+
+             '<span>'+escHtml(i)+'</span></div>';
+    }).join('')+
+  '</div>';
+}
+
+// The checklist, plus any lines the person typed themselves
+function cjBuildChecklist(pkg, notes, extra){
+  var chk = job_checklist_(pkg, notes||'');
+  var items = chk.items.slice();
+  String(extra||'').split('\n').forEach(function(line){
+    var s = line.trim().replace(/^[-*\u2022]\s*/, '');
+    if(s) items.push(s);
+  });
+  var seen = {}, clean = [];
+  items.forEach(function(i){ var k = i.toLowerCase(); if(!seen[k]){ seen[k] = 1; clean.push(i); } });
+  return { items: clean, edits: chk.edits, gown: chk.gown, known: chk.known };
+}
+
+function cjAddSave(){
+  var client = (document.getElementById('cja-client').value||'').trim();
+  var pkg    = (document.getElementById('cja-pkg').value||'').trim();
+  var date   = (document.getElementById('cja-date').value||'').trim();
+  var time   = (document.getElementById('cja-time').value||'').trim();
+  var notes  = (document.getElementById('cja-notes').value||'').trim();
+  var extra  = (document.getElementById('cja-extra').value||'');
+
+  if(!client){ notify('Who is the job for? Add a client name.','error');
+    var c = document.getElementById('cja-client'); if(c) c.focus(); return; }
+  if(!pkg){ notify('Which package? That is what builds the checklist.','error');
+    var p = document.getElementById('cja-pkg'); if(p) p.focus(); return; }
+
+  // Same id the server would give this booking, so confirming it later
+  // updates this job rather than creating a duplicate.
+  var id = job_id_(client, date, time);
+  if((TASKS||[]).some(function(t){ return t.id === id; })){
+    notify('There is already a job for '+client+' on that date and time.','error');
+    return;
+  }
+
+  var chk = cjBuildChecklist(pkg, notes, extra);
+  var now = nowTs();
+  var isRush = notes.toLowerCase().indexOf('rush') !== -1;
+
+  var due = date;
+  if(date){
+    try{
+      var d = new Date(date + 'T00:00:00+08:00');
+      d.setDate(d.getDate() + (isRush ? 1 : 3));
+      due = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    }catch(e){}
+  }
+
+  var task = {
+    id: id, createdAt: now, type: 'clientjob',
+    title: pkg + (date ? ' \u2014 ' + date : '') + (time ? ' ' + time : ''),
+    client: client, clientEmail: '',
+    due: due, dueDate: due,
+    notes: job_notes_(pkg, date, time, notes, chk),
+    driveLink: '', stage: 'new', done: '', completedAt: '', archived: false,
+    priority: (isRush || !chk.known) ? 'high' : 'normal',
+    assignedTo: '', updatedAt: now
+  };
+
+  TASKS.push(task);
+  pushTask(task, true);
+  closeModal();
+  switchSection('jobs');
+  render();
+  notify('\u2713 Job created for '+client+' \u2014 '+chk.items.length+' things to do','success');
+}
+
 
 // ================================================================
 //  🎯 CLIENT JOBS — one screen with everything owed to clients
