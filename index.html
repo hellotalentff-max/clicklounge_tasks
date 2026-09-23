@@ -94,6 +94,31 @@ select.sinput{appearance:auto;}
 .ll-item input{width:17px;height:17px;flex-shrink:0;margin-top:1px;cursor:pointer;accent-color:#e08a28;}
 .ll-item.ll-on span{text-decoration:line-through;color:var(--muted);}
 .ll-item label{cursor:pointer;flex:1;}
+/* 🎯 Client Jobs */
+.cj-group{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:18px 0 8px;display:flex;align-items:center;gap:8px;}
+.cj-group:first-child{margin-top:0;}
+.cj-group i{flex:1;height:1px;background:var(--border);font-style:normal;}
+.cj-card{background:var(--white);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;}
+.cj-card.cj-hot{border-color:#f0a44a;background:linear-gradient(to right,#fff7ec,var(--white));}
+.cj-card.cj-late{border-color:#c0544a;background:linear-gradient(to right,rgba(192,84,74,.05),var(--white));}
+.cj-card.cj-ok{opacity:.72;}
+.cj-top{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+.cj-who{font-size:15px;font-weight:700;color:var(--slate);line-height:1.25;}
+.cj-pkg{font-size:11.5px;color:var(--muted);margin-top:2px;}
+.cj-pct{margin-left:auto;text-align:right;flex-shrink:0;}
+.cj-pct b{font-size:17px;color:var(--slate);}
+.cj-pct span{display:block;font-size:10px;color:var(--muted);}
+.cj-bar{height:7px;background:var(--light2);border-radius:4px;overflow:hidden;margin-bottom:10px;}
+.cj-bar i{display:block;height:100%;background:#f0a44a;transition:width .25s;}
+.cj-bar i.full{background:var(--success);}
+.cj-warn{background:rgba(192,84,74,.09);border:1px solid rgba(192,84,74,.35);color:#8d3a32;border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:600;margin-bottom:10px;}
+.cj-item{display:flex;align-items:flex-start;gap:9px;padding:6px 0;font-size:13px;color:var(--text);line-height:1.45;border-top:1px dashed var(--border);}
+.cj-item:first-of-type{border-top:none;}
+.cj-item input{width:18px;height:18px;flex-shrink:0;margin-top:1px;cursor:pointer;accent-color:var(--success);}
+.cj-item.on span{text-decoration:line-through;color:var(--muted);}
+.cj-item label{cursor:pointer;flex:1;}
+.cj-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:9px;border-top:1px solid var(--border);}
+.cj-empty{text-align:center;padding:48px 20px;color:var(--muted);font-size:13px;}
 
 /* List view */
 .task-list-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--light2);background:var(--white);transition:background .1s;}
@@ -141,8 +166,12 @@ select.sinput{appearance:auto;}
       <div style="font-size:12px;font-weight:800;color:var(--cream);">CLS Tasks</div>
     </div>
     <nav>
-      <button class="sb-link active" data-section="tasks" onclick="switchSection('tasks')">
-        <span style="font-size:18px;">📋</span><span>Tasks</span>
+      <button class="sb-link active" data-section="jobs" onclick="switchSection('jobs')">
+        <span style="font-size:18px;">🎯</span><span>Client Jobs</span>
+        <span class="sb-badge" id="sb-jobs-badge" style="display:none;"></span>
+      </button>
+      <button class="sb-link" data-section="tasks" onclick="switchSection('tasks')">
+        <span style="font-size:18px;">📋</span><span>All Tasks</span>
       </button>
       <button class="sb-link" data-section="sendlink" onclick="switchSection('sendlink')">
         <span style="font-size:18px;">📤</span><span>Send Link</span>
@@ -191,8 +220,24 @@ select.sinput{appearance:auto;}
   </div>
 </div>
 
-<!-- Tasks section (default visible) -->
-<div id="section-tasks">
+<!-- ══ Client Jobs — everything the studio owes a client, in one place ══ -->
+<div id="section-jobs">
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">
+    <h2 style="margin:0;font-size:19px;color:var(--slate);">🎯 Client Jobs</h2>
+    <span id="cj-summary" style="font-size:12px;color:var(--muted);"></span>
+    <span style="flex:1;"></span>
+    <input type="text" id="cj-search" oninput="cjSetSearch(this.value)" placeholder="🔍 Client or package…"
+      style="min-width:180px;padding:8px 14px;border:1.5px solid var(--border);border-radius:20px;font-size:12px;">
+    <button class="btn btn-sm btn-outline" onclick="cjToggleDone()" id="cj-done-btn">Show handed over</button>
+  </div>
+  <p style="margin:0 0 14px;font-size:11.5px;color:var(--muted);">
+    One card per confirmed booking, with everything that package owes the client. Tick things off as you finish them.
+  </p>
+  <div id="cj-list"></div>
+</div>
+
+<!-- Tasks section -->
+<div id="section-tasks" style="display:none;">
 
   <!-- Row 1: Search + primary actions -->
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
@@ -357,6 +402,7 @@ var STAGES = [
 
 var TASK_TYPES = {
   // ── Client Work (revenue-generating, time-sensitive) ──
+  clientjob:   {label:'Client Job',       icon:'🎯', category:'client', categoryLabel:'Client Work'},
   looklab:     {label:'Look Lab Package', icon:'✨', category:'client', categoryLabel:'Client Work'},
   editing:     {label:'Photo Editing',    icon:'🖼', category:'client', categoryLabel:'Client Work'},
   video:       {label:'Video Editing',    icon:'🎬', category:'client', categoryLabel:'Client Work'},
@@ -804,13 +850,16 @@ function toggleArchived(){
 }
 
 function switchSection(name){
-  ['tasks','inventory','settings','hmu','sendlink'].forEach(function(s){
+  ['jobs','tasks','inventory','settings','hmu','sendlink'].forEach(function(s){
     var pnl = document.getElementById('section-'+s);
     if(pnl) pnl.style.display = (s === name) ? '' : 'none';
   });
   document.querySelectorAll('.sb-link').forEach(function(el){
     el.classList.toggle('active', el.dataset.section === name);
   });
+  if(name === 'jobs'){
+    renderClientJobs();
+  }
   if(name === 'inventory'){
     populateInventoryChecker();
     renderInventory();
@@ -891,6 +940,7 @@ function render(){
   renderStaffLegend();
   if (typeof slUpdateBadge === 'function') slUpdateBadge();
   renderInventory();
+  if(typeof renderClientJobs === 'function') renderClientJobs();
   if(CUR_VIEW === 'board') renderKanban();
   else renderList();
 }
@@ -2744,9 +2794,16 @@ function fmtTs(ts){
 //  the same line.
 // ================================================================
 var LL_TAG = 'THE LOOK LAB';
+var CJ_TAG = 'CLIENT JOB';
 
+// A client job is anything raised from a confirmed booking: the generic
+// ones, the Look Lab ones, or any task whose Notes carry either heading
+// (so a job still shows up if someone changes its Type by hand).
 function llIs(t){
-  return !!t && (t.type === 'looklab' || String(t.notes||'').indexOf(LL_TAG) !== -1);
+  if(!t) return false;
+  if(t.type === 'looklab' || t.type === 'clientjob') return true;
+  var n = String(t.notes||'');
+  return n.indexOf(LL_TAG) !== -1 || n.indexOf(CJ_TAG) !== -1;
 }
 
 // Pull the tick boxes out of a task's Notes.
@@ -2820,6 +2877,151 @@ function llPanel(t){
     '<div style="font-size:11px;font-weight:700;color:#b5691a;margin-bottom:6px;" id="ll-count">'+p.done+' of '+p.total+' done</div>'+
     rows+
   '</div>';
+}
+
+// ================================================================
+//  🎯 CLIENT JOBS — one screen with everything owed to clients
+//  ----------------------------------------------------------------
+//  Every confirmed booking raises a job, so this screen is the whole
+//  outstanding workload. Tick boxes work right on the card — no need
+//  to open anything — and a job only leaves the list once every box
+//  is ticked and it's been handed over.
+// ================================================================
+var CJ_SEARCH = '', CJ_SHOW_DONE = false;
+
+function cjSetSearch(q){ CJ_SEARCH = String(q||'').trim().toLowerCase(); renderClientJobs(); }
+function cjToggleDone(){
+  CJ_SHOW_DONE = !CJ_SHOW_DONE;
+  var b = document.getElementById('cj-done-btn');
+  if(b) b.textContent = CJ_SHOW_DONE ? 'Hide handed over' : 'Show handed over';
+  renderClientJobs();
+}
+
+function cjJobs(){
+  return (TASKS||[]).filter(function(t){
+    if(!llIs(t) || t.archived) return false;
+    if(!CJ_SEARCH) return true;
+    var hay = (String(t.client||'')+' '+String(t.title||'')+' '+String(t.notes||'')).toLowerCase();
+    return hay.indexOf(CJ_SEARCH) > -1;
+  });
+}
+
+// Everything ticked AND marked delivered = handed over, off the list
+function cjIsDone(t){
+  var p = llParse(t.notes);
+  return (p.total > 0 && p.done === p.total && (t.stage === 'delivered' || t.done)) ||
+         (p.total === 0 && (t.stage === 'delivered' || t.done));
+}
+
+function renderClientJobs(){
+  var el = document.getElementById('cj-list');
+  if(!el) return;
+  var today = todayStr();
+  var jobs = cjJobs();
+
+  var live = jobs.filter(function(t){ return !cjIsDone(t); });
+  var done = jobs.filter(cjIsDone);
+
+  // Group by how much they need looking at
+  var late = [], hot = [], rest = [];
+  live.forEach(function(t){
+    var p = llParse(t.notes);
+    var overdue = t.dueDate && t.dueDate < today;
+    var needsCheck = /CHECK THE PACKAGE/i.test(String(t.notes||''));
+    if(overdue || needsCheck) late.push(t);
+    else if(p.total && p.done > 0) hot.push(t);
+    else rest.push(t);
+  });
+  var byDue = function(a,b){ return String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999')); };
+  late.sort(byDue); hot.sort(byDue); rest.sort(byDue);
+
+  // The line under the heading, and the sidebar badge
+  var openItems = 0;
+  live.forEach(function(t){ var p = llParse(t.notes); openItems += (p.total - p.done); });
+  var sum = document.getElementById('cj-summary');
+  if(sum) sum.textContent = live.length
+    ? live.length + ' job' + (live.length===1?'':'s') + ' open · ' + openItems + ' thing' + (openItems===1?'':'s') + ' left to do'
+    : 'nothing outstanding';
+  var badge = document.getElementById('sb-jobs-badge');
+  if(badge){
+    badge.textContent = live.length || '';
+    badge.style.display = live.length ? '' : 'none';
+  }
+
+  if(!live.length && !done.length){
+    el.innerHTML = '<div class="cj-empty">No client jobs yet.<br><br>' +
+      'They appear here automatically when a booking is confirmed.</div>';
+    return;
+  }
+
+  var html = '';
+  if(late.length) html += '<div class="cj-group">⚠ Needs attention <i></i></div>' + late.map(cjCard).join('');
+  if(hot.length)  html += '<div class="cj-group">In progress <i></i></div>'      + hot.map(cjCard).join('');
+  if(rest.length) html += '<div class="cj-group">Not started <i></i></div>'      + rest.map(cjCard).join('');
+  if(CJ_SHOW_DONE && done.length) html += '<div class="cj-group">Handed over <i></i></div>' + done.map(cjCard).join('');
+  else if(done.length) html += '<div class="cj-group" style="margin-top:22px;">'+
+    done.length+' handed over <i></i></div>';
+  el.innerHTML = html;
+}
+
+function cjCard(t){
+  var p = llParse(t.notes);
+  var today = todayStr();
+  var overdue = t.dueDate && t.dueDate < today && !cjIsDone(t);
+  var needsCheck = /CHECK THE PACKAGE/i.test(String(t.notes||''));
+  var pct = p.total ? Math.round(p.done / p.total * 100) : 0;
+  var allDone = p.total > 0 && p.done === p.total;
+  var cls = cjIsDone(t) ? 'cj-ok' : (overdue ? 'cj-late' : (needsCheck ? 'cj-hot' : ''));
+
+  var rows = p.items.map(function(it, i){
+    return '<div class="cj-item'+(it.done?' on':'')+'" id="cj-'+t.id+'-'+i+'">'+
+      '<input type="checkbox" id="cjb-'+t.id+'-'+i+'" '+(it.done?'checked':'')+
+        ' onchange="cjToggle(\''+t.id+'\','+i+',this.checked)">'+
+      '<label for="cjb-'+t.id+'-'+i+'"><span>'+escHtml(it.text)+'</span></label>'+
+    '</div>';
+  }).join('');
+
+  // The package line: the job's own header line, minus the client name
+  var pkg = p.pkg || String(t.title||'');
+
+  return '<div class="cj-card '+cls+'" data-cjid="'+t.id+'">'+
+    '<div class="cj-top">'+
+      '<div style="min-width:0;flex:1;">'+
+        '<div class="cj-who">'+escHtml(t.client||'No client')+'</div>'+
+        '<div class="cj-pkg">'+escHtml(pkg)+'</div>'+
+      '</div>'+
+      '<div class="cj-pct"><b>'+p.done+'/'+p.total+'</b><span>'+(allDone?'all done':'done')+'</span></div>'+
+    '</div>'+
+    '<div class="cj-bar"><i class="'+(allDone?'full':'')+'" style="width:'+pct+'%;"></i></div>'+
+    (needsCheck ? '<div class="cj-warn">⚠ This package\'s inclusions aren\'t on file — confirm what this client is owed before you start.</div>' : '')+
+    rows+
+    '<div class="cj-foot">'+
+      (t.dueDate ? '<span class="tc-badge" style="background:'+(overdue?'rgba(192,84,74,.1)':'var(--light)')+';color:'+(overdue?'var(--danger)':'var(--muted)')+';">'+(overdue?'⚠ due ':'📅 due ')+t.dueDate+'</span>' : '')+
+      (t.assignedTo ? '<span class="tc-badge" style="background:var(--light);color:var(--muted);">'+escHtml(t.assignedTo)+'</span>'
+                    : '<button class="btn btn-sm btn-outline" onclick="grabTask(\''+t.id+'\')">✋ Assign to me</button>')+
+      (allDone && !cjIsDone(t) ? '<button class="btn btn-sm btn-teal" onclick="cjHandOver(\''+t.id+'\')">✓ Mark handed over</button>' : '')+
+      '<span style="flex:1;"></span>'+
+      '<button class="btn btn-sm btn-outline" onclick="openTaskDetail(\''+t.id+'\')">Open</button>'+
+    '</div>'+
+  '</div>';
+}
+
+// Tick a box straight on the card
+function cjToggle(taskId, idx, on){
+  llToggle(taskId, idx, on);
+  renderClientJobs();
+}
+
+function cjHandOver(id){
+  var t = (TASKS||[]).find(function(x){ return x.id === id; });
+  if(!t) return;
+  t.stage = 'delivered';
+  t.done = true;
+  t.completedAt = nowTs();
+  t.updatedAt = nowTs();
+  pushTask(t, false);
+  notify('✓ '+(t.client||'Job')+' handed over','success');
+  render();
 }
 
 // The "3/8" badge shown on the task card
