@@ -79,6 +79,21 @@ select.sinput{appearance:auto;}
 .tc-done .tc-title,.tc-done .task-list-item>div>div{text-decoration:line-through;color:var(--muted);}
 .tc-meta{display:flex;gap:6px;flex-wrap:wrap;}
 .tc-badge{font-size:9px;padding:2px 6px;border-radius:6px;font-weight:500;}
+/* ✨ Look Lab packages — orange card so the inclusions stand out from the rest */
+.task-card.tc-looklab{background:linear-gradient(to right,#fff4e3,#fffaf3);border-color:#f0a44a;box-shadow:inset 3px 0 0 #f0a44a;}
+.task-card.tc-looklab:hover{border-color:#e08a28;box-shadow:inset 3px 0 0 #f0a44a,0 2px 10px rgba(240,164,74,.25);}
+.task-list-item.tc-looklab{background:linear-gradient(to right,#fff4e3,#fffaf3);}
+.tc-badge-ll{background:#f0a44a;color:#fff;font-weight:700;}
+.ll-box{background:linear-gradient(to bottom,#fff4e3,#fffaf3);border:1.5px solid #f0a44a;border-radius:10px;padding:12px 14px;margin-bottom:14px;}
+.ll-box h4{margin:0 0 4px;font-size:12px;font-weight:800;color:#b5691a;text-transform:uppercase;letter-spacing:.8px;}
+.ll-pkg{font-size:11px;color:var(--muted);margin-bottom:10px;}
+.ll-bar{height:6px;background:rgba(240,164,74,.25);border-radius:4px;overflow:hidden;margin-bottom:10px;}
+.ll-bar i{display:block;height:100%;background:#f0a44a;transition:width .25s;}
+.ll-item{display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:12.5px;color:var(--text);line-height:1.45;border-top:1px dashed rgba(240,164,74,.35);}
+.ll-item:first-of-type{border-top:none;}
+.ll-item input{width:17px;height:17px;flex-shrink:0;margin-top:1px;cursor:pointer;accent-color:#e08a28;}
+.ll-item.ll-on span{text-decoration:line-through;color:var(--muted);}
+.ll-item label{cursor:pointer;flex:1;}
 
 /* List view */
 .task-list-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--light2);background:var(--white);transition:background .1s;}
@@ -146,7 +161,7 @@ select.sinput{appearance:auto;}
       </button>
     </nav>
     <div style="margin-top:auto;padding:14px 12px;border-top:1px solid rgba(245,240,232,0.1);font-size:10px;color:rgba(245,240,232,0.5);">
-      Click Lounge Studio<br>Tasks Manager
+      ClickLounge Studio<br>Tasks Manager
     </div>
   </aside>
 
@@ -342,6 +357,7 @@ var STAGES = [
 
 var TASK_TYPES = {
   // ── Client Work (revenue-generating, time-sensitive) ──
+  looklab:     {label:'Look Lab Package', icon:'✨', category:'client', categoryLabel:'Client Work'},
   editing:     {label:'Photo Editing',    icon:'🖼', category:'client', categoryLabel:'Client Work'},
   video:       {label:'Video Editing',    icon:'🎬', category:'client', categoryLabel:'Client Work'},
   printing:    {label:'Printing',         icon:'🖨', category:'client', categoryLabel:'Client Work'},
@@ -2217,7 +2233,7 @@ function renderKanban(){
       var ts = '';
       if(t.createdAt) ts += '<span title="Created" style="font-size:9px;color:var(--muted);">🕐 '+fmtTs(t.createdAt)+'</span>';
       if(t.completedAt) ts += '<span title="Completed" style="font-size:9px;color:var(--success);margin-left:8px;">✓ '+fmtTs(t.completedAt)+'</span>';
-      html += '<div class="task-card'+(isDone?' tc-done':'')+(isOverdue?' tc-overdue':'')+'" data-tid="'+t.id+'" style="border-left:4px solid '+(isOverdue?'#c0544a':stripeColor)+';" onclick="openTaskDetail(this.dataset.tid)">'+
+      html += '<div class="task-card'+(isDone?' tc-done':'')+(isOverdue?' tc-overdue':'')+(llIs(t)&&!isDone?' tc-looklab':'')+'" data-tid="'+t.id+'" style="border-left:4px solid '+(isOverdue?'#c0544a':stripeColor)+';" onclick="openTaskDetail(this.dataset.tid)">'+
         (isOverdue ? '<div style="font-size:9px;font-weight:800;color:#fff;background:#c0544a;border-radius:4px;padding:2px 6px;display:inline-block;margin-bottom:6px;letter-spacing:.5px;">⚠ OVERDUE</div>' : '')+
         '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">'+
           '<input type="checkbox" class="tc-check" '+(isDone?'checked':'')+' onclick="event.stopPropagation();toggleTaskDone(\''+t.id+'\',this.checked);" title="Mark done">'+
@@ -2233,6 +2249,7 @@ function renderKanban(){
           (t.dueDate ? '<span class="tc-badge" style="background:'+(isOverdue?'rgba(192,84,74,0.1)':'var(--light)')+';color:'+(isOverdue?'var(--danger)':'var(--muted)')+';">📅 '+t.dueDate+'</span>' : '')+
           (t.priority==='high' ? '<span class="tc-badge" style="background:rgba(192,84,74,0.1);color:var(--danger);">🔴 High</span>' : '')+
           (t.driveLink ? '<span class="tc-badge" style="background:rgba(81,137,125,0.1);color:var(--teal);">📂 Drive</span>' : '')+
+          llBadge(t)+
           taskAgeLabel(t)+
         '</div>'+
         (!t.assignedTo ? '<button onclick="event.stopPropagation();grabTask(\''+t.id+'\')" style="margin-top:8px;width:100%;padding:6px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">✋ Assign to me</button>' : '')+
@@ -2272,7 +2289,7 @@ function renderList(){
     var ts = '';
     if(t.createdAt) ts += '🕐 '+fmtTs(t.createdAt);
     if(t.completedAt) ts += '  ·  ✓ '+fmtTs(t.completedAt);
-    html += '<div class="task-list-item'+(isDone?' tc-done':'')+'" data-tid="'+t.id+'" style="border-left:4px solid '+stripeColor+';" onclick="openTaskDetail(this.dataset.tid)">'+
+    html += '<div class="task-list-item'+(isDone?' tc-done':'')+(llIs(t)&&!isDone?' tc-looklab':'')+'" data-tid="'+t.id+'" style="border-left:4px solid '+(llIs(t)&&!isDone?'#f0a44a':stripeColor)+';" onclick="openTaskDetail(this.dataset.tid)">'+
       '<input type="checkbox" class="tc-check" '+(isDone?'checked':'')+' onclick="event.stopPropagation();toggleTaskDone(\''+t.id+'\',this.checked);" title="Mark done">'+
       staffAvatar(t.assignedTo, 28)+
       '<div style="flex:1;min-width:0;">'+
@@ -2284,6 +2301,7 @@ function renderList(){
           (ts ? ' · '+ts : '')+
         '</div>'+
       '</div>'+
+      llBadge(t)+
       '<span class="tc-badge" style="background:'+stage.bg+';color:'+stage.color+';flex-shrink:0;">'+stage.label+'</span>'+
       (isOverdue ? '<span class="tc-badge" style="background:rgba(192,84,74,0.1);color:var(--danger);flex-shrink:0;">Overdue</span>' : '')+
     '</div>';
@@ -2557,6 +2575,7 @@ function openTaskDetail(id){
 
   var html =
     '<h3 style="margin-bottom:16px;">'+(isNew?'+ New Task':'✏ Edit Task')+'</h3>'+
+    llPanel(t) +
     tsPanel +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
       '<div class="field"><label>Type *</label>'+
@@ -2706,6 +2725,111 @@ function fmtTs(ts){
     }
     return label;
   } catch(e){ return ts; }
+}
+
+// ================================================================
+//  ✨ THE LOOK LAB — inclusions checklist
+//  ----------------------------------------------------------------
+//  A confirmed Look Lab booking raises an orange task whose Notes hold
+//  one tick box per inclusion the client actually built:
+//
+//      ✨ THE LOOK LAB — to accomplish
+//      The Look Lab: Prestige + The Double Prestige + Signature Wall
+//      [ ] Edit 7 photos
+//      [x] Print the 8×24in portrait
+//
+//  The boxes are plain text, so they survive the sheet, the sync and
+//  anyone editing the Notes by hand. These functions read them back,
+//  draw them as real checkboxes, and write a tick straight back into
+//  the same line.
+// ================================================================
+var LL_TAG = 'THE LOOK LAB';
+
+function llIs(t){
+  return !!t && (t.type === 'looklab' || String(t.notes||'').indexOf(LL_TAG) !== -1);
+}
+
+// Pull the tick boxes out of a task's Notes.
+// Returns {items:[{text,done,line}], done:n, total:n, pkg:''}
+function llParse(notes){
+  var lines = String(notes||'').split('\n');
+  var items = [], pkg = '';
+  lines.forEach(function(raw, i){
+    var m = raw.match(/^\s*\[([ xX])\]\s?(.*)$/);
+    if(m){ items.push({ text: m[2], done: m[1].toLowerCase() === 'x', line: i }); return; }
+    if(!pkg && raw.indexOf('The Look Lab') !== -1) pkg = raw.trim();
+  });
+  var done = items.filter(function(x){ return x.done; }).length;
+  return { items: items, done: done, total: items.length, pkg: pkg };
+}
+
+// Tick or untick one box and push the change. `idx` is the box's position in
+// the parsed list, not the line number, so reordered notes still line up.
+function llToggle(taskId, idx, on){
+  var t = TASKS.find(function(x){ return x.id === taskId; });
+  if(!t) return;
+  var lines = String(t.notes||'').split('\n');
+  var parsed = llParse(t.notes);
+  var item = parsed.items[idx];
+  if(!item) return;
+  lines[item.line] = lines[item.line].replace(/^(\s*)\[[ xX]\]/, '$1[' + (on ? 'x' : ' ') + ']');
+  t.notes = lines.join('\n');
+  t.updatedAt = nowTs();
+  if(!t.createdAt) t.createdAt = nowTs();
+  pushTask(t, false);
+
+  // Keep the Notes box in the open modal in step — otherwise pressing
+  // "Save Changes" afterwards would write the pre-tick text back over it.
+  var ta = document.getElementById('td-notes');
+  if(ta) ta.value = t.notes;
+
+  // Redraw the progress bar and the struck-through line in place, so ticking
+  // several boxes in a row doesn't rebuild the modal under the person's cursor.
+  var after = llParse(t.notes);
+  var row = document.getElementById('ll-item-' + idx);
+  if(row) row.className = 'll-item' + (on ? ' ll-on' : '');
+  var bar = document.getElementById('ll-bar');
+  if(bar) bar.style.width = (after.total ? Math.round(after.done / after.total * 100) : 0) + '%';
+  var cnt = document.getElementById('ll-count');
+  if(cnt) cnt.textContent = after.done + ' of ' + after.total + ' done';
+
+  // All ticked → offer to move the task on
+  if(after.total && after.done === after.total && t.stage !== 'delivered' && t.stage !== 'pickup'){
+    notify('✨ All inclusions done — mark the package Ready when it\'s packed','success');
+  }
+  render();
+}
+
+// The orange checklist panel for the task detail modal
+function llPanel(t){
+  if(!llIs(t)) return '';
+  var p = llParse(t.notes);
+  if(!p.total) return '';
+  var pct = Math.round(p.done / p.total * 100);
+  var rows = p.items.map(function(it, i){
+    return '<div class="ll-item'+(it.done?' ll-on':'')+'" id="ll-item-'+i+'">'+
+      '<input type="checkbox" id="ll-cb-'+i+'" '+(it.done?'checked':'')+' '+
+        'onchange="llToggle(\''+t.id+'\','+i+',this.checked)">'+
+      '<label for="ll-cb-'+i+'"><span>'+escHtml(it.text)+'</span></label>'+
+    '</div>';
+  }).join('');
+  return '<div class="ll-box">'+
+    '<h4>✨ Look Lab — inclusions to accomplish</h4>'+
+    (p.pkg ? '<div class="ll-pkg">'+escHtml(p.pkg)+'</div>' : '')+
+    '<div class="ll-bar"><i id="ll-bar" style="width:'+pct+'%;"></i></div>'+
+    '<div style="font-size:11px;font-weight:700;color:#b5691a;margin-bottom:6px;" id="ll-count">'+p.done+' of '+p.total+' done</div>'+
+    rows+
+  '</div>';
+}
+
+// The "3/8" badge shown on the task card
+function llBadge(t){
+  if(!llIs(t)) return '';
+  var p = llParse(t.notes);
+  if(!p.total) return '';
+  var all = p.done === p.total;
+  return '<span class="tc-badge tc-badge-ll"'+(all?' style="background:var(--success);"':'')+'>'+
+    (all ? '✓ all inclusions done' : '✨ '+p.done+'/'+p.total+' inclusions')+'</span>';
 }
 
 function saveTask(existingId){
@@ -2914,7 +3038,10 @@ if(!hasUrl()){
 
 render();
 loadTimeCommandStaff();
-  cleanupOldShootPreps(); 
+// Defined further down in the second <script> block, so it isn't visible yet
+// when this line runs on load — same guard as slUpdateBadge. It's also called
+// again from DOMContentLoaded below, so nothing is skipped.
+if(typeof cleanupOldShootPreps === 'function') cleanupOldShootPreps();
 
 // Sync on load
 if(hasUrl()) {
