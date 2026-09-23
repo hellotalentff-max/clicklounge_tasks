@@ -739,6 +739,9 @@ async function syncAll(){
       CLIENTS = Object.keys(clientMap).map(function(k){ return clientMap[k]; });
       saveClients();
 
+      // refresh the package deliverables list too
+      if(typeof cjFetchPackages === 'function') cjFetchPackages();
+
       notify('Synced ✓ — '+TASKS.length+' tasks, '+CLIENTS.length+' clients','success');
       updateClientCount();
       updateLastSync();
@@ -3169,11 +3172,12 @@ function job_norm_(s) {
   return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-function job_lookup_(service) {
+function job_lookup_(service, list) {
+  var P = list || cjPackages();
   var low = job_norm_(service);
   var best = null, bestLen = 0, weakBest = null, weakLen = 0;
-  for (var i = 0; i < JOB.P.length; i++) {
-    var e = JOB.P[i];
+  for (var i = 0; i < P.length; i++) {
+    var e = P[i];
     for (var j = 0; j < e.m.length; j++) {
       if (low.indexOf(e.m[j]) === -1) continue;
       if (e.weak) { if (e.m[j].length > weakLen) { weakBest = e; weakLen = e.m[j].length; } }
@@ -3192,7 +3196,7 @@ function job_addonEdits_(note) {
   return total;
 }
 
-function job_checklist_(service, notes) {
+function job_checklist_(service, notes, list) {
   var note = String(notes || '');
   var low  = note.toLowerCase();
 
@@ -3204,7 +3208,7 @@ function job_checklist_(service, notes) {
     return { items: ll.items, edits: ll.edits, gown: ll.gown, known: ll.known, pkg: null };
   }
 
-  var P = job_lookup_(service);
+  var P = job_lookup_(service, list);
   var prep = [], prints = [], frames = [], edits = 0, extras = [], rush = false;
   var hmu = '', cards = 0, digital = '';
 
@@ -3290,6 +3294,46 @@ function job_id_(fbName, bookDate, timeSlot) {
 }
 
 
+// ── The master package list ──────────────────────────────────
+//  The real list lives in the "Packages" tab of the POS spreadsheet, so
+//  inclusions can be changed without touching code. It's fetched on sync
+//  and kept in localStorage; the table above is only the fallback, used
+//  before the first sync or when the connection is down.
+var CJ_PKGS = null;
+
+function cjPackages(){
+  if(CJ_PKGS && CJ_PKGS.length) return CJ_PKGS;
+  try{
+    var raw = localStorage.getItem('cl_packages');
+    if(raw){
+      var parsed = JSON.parse(raw);
+      if(Array.isArray(parsed) && parsed.length){ CJ_PKGS = parsed; return CJ_PKGS; }
+    }
+  }catch(e){}
+  return JOB.P;                       // built-in fallback
+}
+
+function cjPackagesSource(){
+  return (CJ_PKGS && CJ_PKGS.length) || (function(){
+    try{ var r = localStorage.getItem('cl_packages'); return r && JSON.parse(r).length; }catch(e){ return false; }
+  })() ? 'the Packages tab' : 'the built-in list';
+}
+
+// Pull the list from the Apps Script. Called on sync; failure is harmless
+// because the built-in table covers it.
+async function cjFetchPackages(){
+  if(typeof hasUrl !== 'function' || !hasUrl()) return false;
+  try{
+    var r = await gasCall('getPackages', {});
+    if(r && r.ok && Array.isArray(r.packages) && r.packages.length){
+      CJ_PKGS = r.packages;
+      try{ localStorage.setItem('cl_packages', JSON.stringify(r.packages)); }catch(e){}
+      return true;
+    }
+  }catch(e){ console.log('package list fetch failed, using the built-in one:', e.message); }
+  return false;
+}
+
 // ================================================================
 //  ➕ ADD A JOB BY HAND
 //  ----------------------------------------------------------------
@@ -3334,7 +3378,8 @@ function cjOpenAdd(){
     '<h3 style="margin-bottom:4px;">\u2795 New client job</h3>'+
     '<p style="margin:0 0 16px;font-size:11.5px;color:var(--muted);">'+
       'For walk-ins and bookings that didn\'t come through the booking form. '+
-      'Pick a package and the checklist fills itself in.</p>'+
+      'Pick a package and the checklist fills itself in. '+
+      '<span style="opacity:.8;">Inclusions from '+cjPackagesSource()+'.</span></p>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
       '<div class="field"><label>Client name *</label>'+
         '<input type="text" id="cja-client" class="sinput" list="cja-clients" placeholder="Who is it for?" autocomplete="off">'+
