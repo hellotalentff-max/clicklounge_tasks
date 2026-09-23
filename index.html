@@ -119,6 +119,8 @@ select.sinput{appearance:auto;}
 .cj-item label{cursor:pointer;flex:1;}
 .cj-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:9px;border-top:1px solid var(--border);}
 .cj-empty{text-align:center;padding:48px 20px;color:var(--muted);font-size:13px;}
+.cj-del{background:none;border:1.5px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 9px;font-size:13px;line-height:1;cursor:pointer;transition:all .15s;}
+.cj-del:hover{border-color:var(--danger);color:var(--danger);background:rgba(192,84,74,.07);}
 
 /* List view */
 .task-list-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--light2);background:var(--white);transition:background .1s;}
@@ -3002,8 +3004,24 @@ function cjCard(t){
       (allDone && !cjIsDone(t) ? '<button class="btn btn-sm btn-teal" onclick="cjHandOver(\''+t.id+'\')">✓ Mark handed over</button>' : '')+
       '<span style="flex:1;"></span>'+
       '<button class="btn btn-sm btn-outline" onclick="openTaskDetail(\''+t.id+'\')">Open</button>'+
+      '<button class="cj-del" title="Delete this job" onclick="cjDelete(\''+t.id+'\')">🗑</button>'+
     '</div>'+
   '</div>';
+}
+
+// Delete a job off the board. Names the client in the prompt so nobody
+// deletes the wrong card, and warns when there's still work outstanding.
+function cjDelete(id){
+  var t = (TASKS||[]).find(function(x){ return x.id === id; });
+  if(!t) return;
+  var p = llParse(t.notes);
+  var left = p.total - p.done;
+  var msg = 'Delete the job for ' + (t.client || 'this client') + '?';
+  if(left > 0) msg += '\n\n' + left + ' thing' + (left===1?' is':'s are') + ' still unticked. ' +
+    'This removes the job for good — whatever is left on it won\'t be tracked anywhere.';
+  if(!confirm(msg)) return;
+  deleteTask(id);           // handles the sheet, the sync and the deleted-id list
+  renderClientJobs();
 }
 
 // Tick a box straight on the card
