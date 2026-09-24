@@ -2901,6 +2901,23 @@ var JOB = {
   TYPE:  'clientjob',
   COLOR: '#ffd9a6',
 
+  // ── Where the master list of deliverables lives ──
+  // The "Packages" tab of this spreadsheet is the source of truth. Edit a
+  // package there and both the Apps Script and the Tasks Manager pick it up
+  // — no code change. Run setupPackagesTab() once to create and fill it.
+  //
+  // The table further down (JOB.P) is only a FALLBACK, used if the tab is
+  // missing, empty or unreadable, so a broken tab can never stop a job
+  // being raised.
+  // ── ClickCards → points ──
+  // A package's "ClickCards" number is credited to the client's ClickCard
+  // account as points when the booking is confirmed, at this rate. Nothing
+  // is handed over physically any more.
+  CARD_POINTS: 10,
+
+  SHEET_TAB: 'Packages',
+  CACHE_SECS: 300,        // how long a read of the tab is reused
+
   // How far back the backfill reaches, in days before today.
   //   0  = today and future shoots only (the default)
   //   7  = also pick up last week's shoots, which may still owe edits
@@ -3120,16 +3137,17 @@ function job_llPick_(hay, map) {
   return best;
 }
 
-function job_lookLab_(service, note) {
+function job_lookLab_(service, note, llParts) {
+  var LL = llParts || (typeof job_llParts_ === 'function' ? job_llParts_() : JOBLL);
   var label = String(service || '');
   var after = label.indexOf(':') !== -1 ? label.slice(label.indexOf(':') + 1) : label;
   var parts = after.split('+');
 
-  var sKey = job_llPick_(parts[0] || '', JOBLL.SESSIONS)  || job_llPick_(after, JOBLL.SESSIONS);
-  var mKey = job_llPick_(parts[1] || '', JOBLL.MOODS)     || job_llPick_(after, JOBLL.MOODS);
-  var kKey = job_llPick_(parts.slice(2).join('+') || '', JOBLL.KEEPSAKES) || job_llPick_(after, JOBLL.KEEPSAKES);
+  var sKey = job_llPick_(parts[0] || '', LL.SESSIONS)  || job_llPick_(after, LL.SESSIONS);
+  var mKey = job_llPick_(parts[1] || '', LL.MOODS)     || job_llPick_(after, LL.MOODS);
+  var kKey = job_llPick_(parts.slice(2).join('+') || '', LL.KEEPSAKES) || job_llPick_(after, LL.KEEPSAKES);
 
-  var S = JOBLL.SESSIONS[sKey], M = JOBLL.MOODS[mKey], K = JOBLL.KEEPSAKES[kKey];
+  var S = LL.SESSIONS[sKey], M = LL.MOODS[mKey], K = LL.KEEPSAKES[kKey];
 
   // The label has to name a session, a mood and a keepsake. If it only says
   // "The Look Lab" the build was never carried over, and no list can be
@@ -3153,7 +3171,7 @@ function job_lookLab_(service, note) {
   });
 
   var low = String(note || '').toLowerCase();
-  JOBLL.EXTRAS.forEach(function (x) { if (low.indexOf(x.m) !== -1) extras.push(x.item); });
+  LL.EXTRAS.forEach(function (x) { if (low.indexOf(x.m) !== -1) extras.push(x.item); });
   edits += job_addonEdits_(note);
 
   var gown = '';
@@ -3173,8 +3191,8 @@ function job_lookLab_(service, note) {
   }
   items.push(edits > 0 ? 'Edit ' + edits + ' photo' + (edits === 1 ? '' : 's')
                        : 'Cull and deliver the digital copies');
-  if (pmini) items.push(JOBLL.PRINT_MINI);
-  if (p8x24) items.push(JOBLL.PRINT_8X24);
+  if (pmini) items.push(LL.PRINT_MINI);
+  if (p8x24) items.push(LL.PRINT_8X24);
   frames.forEach(function (f) { items.push(f); });
   extras.forEach(function (x) { items.push(x); });
   items.push('Cull and upload the gallery');
@@ -3190,7 +3208,7 @@ function job_norm_(s) {
 }
 
 function job_lookup_(service, list) {
-  var P = list || cjPackages();
+  var P = list || (typeof job_packages_ === 'function' ? job_packages_() : JOB.P);
   var low = job_norm_(service);
   var best = null, bestLen = 0, weakBest = null, weakLen = 0;
   for (var i = 0; i < P.length; i++) {
@@ -3213,7 +3231,7 @@ function job_addonEdits_(note) {
   return total;
 }
 
-function job_checklist_(service, notes, list) {
+function job_checklist_(service, notes, list, llParts) {
   var note = String(notes || '');
   var low  = note.toLowerCase();
 
@@ -3221,7 +3239,7 @@ function job_checklist_(service, notes, list) {
   // from the label rather than the table. Handled in this same file, so a
   // Look Lab booking can't quietly fall through to a generic list.
   if (job_isLookLab_(service)) {
-    var ll = job_lookLab_(service, note);
+    var ll = job_lookLab_(service, note, llParts);
     return { items: ll.items, edits: ll.edits, gown: ll.gown, known: ll.known, pkg: null };
   }
 
@@ -3277,7 +3295,12 @@ function job_checklist_(service, notes, list) {
   if (edits > 0) items.push('Edit ' + edits + ' photo' + (edits === 1 ? '' : 's'));
   prints.forEach(function (x) { items.push(x); });
   frames.forEach(function (x) { items.push(x); });
-  if (cards > 0) items.push('Hand over ' + cards + ' ClickCard' + (cards === 1 ? '' : 's'));
+  // ClickCards are credited as points automatically on confirmation, so this
+  // is a record of what happened, not something left to do — job_notes_ ticks
+  // any line that starts with ✅.
+  if (cards > 0) items.push('\u2705 \ud83c\udfc5 ' + (cards * JOB.CARD_POINTS) +
+    ' ClickCard points credited to their account (' + cards + ' card' +
+    (cards === 1 ? '' : 's') + ' \u00d7 ' + JOB.CARD_POINTS + ')');
   extras.forEach(function (x) { items.push(x); });
   if (rush) items.push('⚡ RUSH — the client paid for rush editing, deliver ahead of the normal lead time');
 
@@ -3297,7 +3320,11 @@ function job_checklist_(service, notes, list) {
 function job_notes_(service, bookDate, timeSlot, notes, chk) {
   var lines = [JOB.TAG, String(service || '(no package)') +
     (bookDate ? ' — ' + bookDate : '') + (timeSlot ? ' ' + timeSlot : '')];
-  chk.items.forEach(function (i) { lines.push('[ ] ' + i); });
+  chk.items.forEach(function (i) {
+    // a leading ✅ means it already happened — write it ticked
+    if (i.indexOf('\u2705 ') === 0) lines.push('[x] ' + i.slice(2));
+    else lines.push('[ ] ' + i);
+  });
   var own = String(notes || '').trim();
   if (own) lines.push('—', 'From the booking: ' + own);
   return lines.join('\n');
@@ -3317,6 +3344,7 @@ function job_id_(fbName, bookDate, timeSlot) {
 //  and kept in localStorage; the table above is only the fallback, used
 //  before the first sync or when the connection is down.
 var CJ_PKGS = null;
+var CJ_LL   = null;   // the Look Lab part table, from the "Look Lab Parts" tab
 
 function cjPackages(){
   if(CJ_PKGS && CJ_PKGS.length) return CJ_PKGS;
@@ -3330,23 +3358,60 @@ function cjPackages(){
   return JOB.P;                       // built-in fallback
 }
 
+// The Look Lab is priced part by part, so it has its own little table.
+// Same rule as the packages: the sheet wins, the built-in copy is the
+// fallback. A part table is only usable if it has all three kinds.
+function cjLookLab(){
+  if(cjLLOk(CJ_LL)) return CJ_LL;
+  try{
+    var raw = localStorage.getItem('cl_looklab');
+    if(raw){
+      var parsed = JSON.parse(raw);
+      if(cjLLOk(parsed)){ CJ_LL = parsed; return CJ_LL; }
+    }
+  }catch(e){}
+  return JOBLL;                       // built-in fallback
+}
+
+function cjLLOk(ll){
+  return !!(ll && ll.SESSIONS && ll.MOODS && ll.KEEPSAKES &&
+            Object.keys(ll.SESSIONS).length && Object.keys(ll.MOODS).length &&
+            Object.keys(ll.KEEPSAKES).length);
+}
+
+// ── The two hooks the ported logic looks for ────────────────────
+//  The block above is lifted from ClientJobs.gs untouched, and it asks
+//  for its tables through these two names. Defining them here is what
+//  makes the browser read the sheet's lists instead of the built-in
+//  fallbacks — and it keeps the ported code word for word the same as
+//  the Apps Script, so the two can't drift.
+function job_packages_(){ return cjPackages(); }
+function job_llParts_(){  return cjLookLab();  }
+
 function cjPackagesSource(){
   return (CJ_PKGS && CJ_PKGS.length) || (function(){
     try{ var r = localStorage.getItem('cl_packages'); return r && JSON.parse(r).length; }catch(e){ return false; }
   })() ? 'the Packages tab' : 'the built-in list';
 }
 
-// Pull the list from the Apps Script. Called on sync; failure is harmless
-// because the built-in table covers it.
+// Pull the lists from the Apps Script. Called on sync; failure is harmless
+// because the built-in tables cover it.
 async function cjFetchPackages(){
   if(typeof hasUrl !== 'function' || !hasUrl()) return false;
   try{
     var r = await gasCall('getPackages', {});
+    var got = false;
     if(r && r.ok && Array.isArray(r.packages) && r.packages.length){
       CJ_PKGS = r.packages;
       try{ localStorage.setItem('cl_packages', JSON.stringify(r.packages)); }catch(e){}
-      return true;
+      got = true;
     }
+    if(r && r.ok && cjLLOk(r.lookLab)){
+      CJ_LL = r.lookLab;
+      try{ localStorage.setItem('cl_looklab', JSON.stringify(r.lookLab)); }catch(e){}
+      got = true;
+    }
+    return got;
   }catch(e){ console.log('package list fetch failed, using the built-in one:', e.message); }
   return false;
 }
@@ -3368,14 +3433,25 @@ async function cjFetchPackages(){
 // Every package name the deliverables table knows, for the suggestions list
 function cjKnownPackages(){
   var names = [];
-  (JOB.P || []).forEach(function(e){
+  // From the live package list, so a package added in the Packages tab
+  // turns up here without a code change.
+  (cjPackages() || []).forEach(function(e){
     (e.m || []).forEach(function(frag){
       names.push(frag.replace(/\b\w/g, function(c){ return c.toUpperCase(); }));
     });
   });
-  ['The Look Lab: Standard + Styleshots + Digital',
-   'The Look Lab: Styled + The Coat Code + Mini Keepsake',
-   'The Look Lab: Prestige + The Double Prestige + Signature Wall'].forEach(function(x){ names.push(x); });
+  // The Look Lab has no rows — its labels are session + mood + keepsake,
+  // built from the part table. Suggestions only: anything typed by hand
+  // still builds a checklist.
+  var ll = cjLookLab();
+  var cap = function(s){ return String(s).replace(/\b\w/g, function(c){ return c.toUpperCase(); }); };
+  Object.keys(ll.SESSIONS || {}).forEach(function(s){
+    Object.keys(ll.MOODS || {}).forEach(function(m){
+      Object.keys(ll.KEEPSAKES || {}).forEach(function(k){
+        names.push('The Look Lab: ' + cap(s) + ' + ' + cap(m) + ' + ' + cap(k));
+      });
+    });
+  });
   // plus anything already used on a real job
   (TASKS||[]).forEach(function(t){
     if(llIs(t)){ var p = llParse(t.notes).pkg; if(p) names.push(p.replace(/\s+\u2014.*$/, '')); }
@@ -3450,6 +3526,8 @@ function cjAddPreview(){
 
 // The checklist, plus any lines the person typed themselves
 function cjBuildChecklist(pkg, notes, extra){
+  // No tables passed: job_packages_() and job_llParts_() below hand it
+  // whatever the sheet last sent, exactly as the Apps Script does.
   var chk = job_checklist_(pkg, notes||'');
   var items = chk.items.slice();
   String(extra||'').split('\n').forEach(function(line){
