@@ -117,6 +117,21 @@ select.sinput{appearance:auto;}
 .cj-item input{width:18px;height:18px;flex-shrink:0;margin-top:1px;cursor:pointer;accent-color:var(--success);}
 .cj-item.on span{text-decoration:line-through;color:var(--muted);}
 .cj-item label{cursor:pointer;flex:1;}
+.cj-item .cj-x{flex-shrink:0;border:none;background:transparent;color:var(--border);font-size:16px;line-height:1;padding:0 2px;cursor:pointer;opacity:0;transition:opacity .15s,color .15s;}
+.cj-item:hover .cj-x{opacity:1;}
+.cj-item .cj-x:hover{color:var(--danger);}
+.cj-note{font-size:12px;color:var(--muted);line-height:1.5;padding:2px 0 8px;}
+.cj-add{display:block;width:100%;margin-top:8px;border:1px dashed var(--border);background:transparent;color:var(--muted);border-radius:8px;padding:7px;font-size:11.5px;font-weight:600;cursor:pointer;transition:border-color .15s,color .15s;}
+.cj-add:hover{border-color:#f0a44a;color:#c4761f;}
+.cj-links{margin-top:10px;padding-top:9px;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:6px;}
+.cj-link{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.cj-link-l{font-size:14px;width:20px;flex-shrink:0;text-align:center;}
+.cj-link input{flex:1;min-width:150px;padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:11.5px;font-family:inherit;color:var(--text);background:var(--white);}
+.cj-link input:focus{outline:none;border-color:#f0a44a;}
+.cj-link-b{flex-shrink:0;border:1px solid var(--border);background:var(--white);color:var(--muted);border-radius:7px;padding:5px 9px;font-size:11px;font-weight:600;cursor:pointer;text-decoration:none;line-height:1.3;}
+.cj-link-b:hover{border-color:var(--teal);color:var(--teal);}
+.cj-link-b.send{border-color:rgba(81,137,125,.45);color:var(--teal);}
+.cj-sent{flex-shrink:0;font-size:10.5px;font-weight:700;color:var(--success);background:rgba(61,140,110,.1);border-radius:12px;padding:4px 9px;}
 .cj-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:9px;border-top:1px solid var(--border);}
 .cj-empty{text-align:center;padding:48px 20px;color:var(--muted);font-size:13px;}
 .cj-del{background:none;border:1.5px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 9px;font-size:13px;line-height:1;cursor:pointer;transition:all .15s;}
@@ -171,17 +186,6 @@ select.sinput{appearance:auto;}
       <button class="sb-link active" data-section="jobs" onclick="switchSection('jobs')">
         <span style="font-size:18px;">🎯</span><span>Client Jobs</span>
         <span class="sb-badge" id="sb-jobs-badge" style="display:none;"></span>
-      </button>
-      <button class="sb-link" data-section="tasks" onclick="switchSection('tasks')">
-        <span style="font-size:18px;">📋</span><span>All Tasks</span>
-      </button>
-      <button class="sb-link" data-section="sendlink" onclick="switchSection('sendlink')">
-        <span style="font-size:18px;">📤</span><span>Send Link</span>
-        <span class="sb-badge" id="sb-sendlink-badge" style="display:none;"></span>
-      </button>
-      <button class="sb-link" data-section="hmu" onclick="switchSection('hmu')">
-        <span style="font-size:18px;">📸</span><span>Shoot Preps</span>
-        <span class="sb-badge" id="sb-hmu-badge" style="display:none;"></span>
       </button>
       <button class="sb-link" data-section="inventory" onclick="switchSection('inventory')">
         <span style="font-size:18px;">📦</span><span>Inventory</span>
@@ -240,113 +244,8 @@ select.sinput{appearance:auto;}
 </div>
 
 <!-- Tasks section -->
-<div id="section-tasks" style="display:none;">
-
-  <!-- Row 1: Search + primary actions -->
-  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-    <input type="text" id="task-search" oninput="setSearch(this.value)" placeholder="🔍 Search…"
-      style="flex:1;min-width:160px;padding:9px 14px;border:1.5px solid var(--border);border-radius:20px;font-size:12px;">
-    <div id="week-done-pill" style="font-size:11px;font-weight:700;color:var(--success);background:rgba(61,140,110,.1);border-radius:16px;padding:7px 14px;white-space:nowrap;"></div>
-    <button class="btn btn-gold" onclick="openNewTask()">+ New Task</button>
-    <button class="btn btn-sm btn-outline" onclick="toggleMoreTools()" id="more-tools-btn" title="More options">⋯</button>
-  </div>
-
-  <!-- Row 2: Status filter (the main way staff navigate) -->
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;" id="filter-bar">
-    <button class="filter-btn active" data-f="today" onclick="setFilter('today')">⭐ Today</button>
-    <button class="filter-btn" data-f="all" onclick="setFilter('all')">All</button>
-    <button class="filter-btn" data-f="new" onclick="setFilter('new')">🆕 New</button>
-    <button class="filter-btn" data-f="inprogress" onclick="setFilter('inprogress')">⚙ In Progress</button>
-    <button class="filter-btn" data-f="pickup" onclick="setFilter('pickup')">📦 Ready</button>
-    <button class="filter-btn" data-f="delivered" onclick="setFilter('delivered')">✓ Delivered</button>
-    <button class="filter-btn" data-f="overdue" onclick="setFilter('overdue')">⚠ Overdue</button>
-  </div>
-
-  <!-- Collapsible "More tools" drawer (hidden by default) -->
-  <div id="more-tools" style="display:none;background:var(--light);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;">
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-      <button class="btn btn-sm btn-teal" id="view-board-btn" onclick="setView('board')">⊞ Board</button>
-      <button class="btn btn-sm btn-outline" id="view-list-btn" onclick="setView('list')">☰ List</button>
-      <button class="btn btn-sm btn-outline" id="view-archive-btn" onclick="toggleArchived()">📦 Archived</button>
-      <button class="btn btn-sm btn-outline" onclick="openReportModal()">📊 Report</button>
-      <select id="staff-filter" onchange="setStaffFilter(this.value)" style="padding:6px 12px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:var(--white);min-width:130px;">
-        <option value="">All staff</option>
-      </select>
-    </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
-      <span style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:700;">Quick add:</span>
-      <button class="filter-btn" onclick="quickAddTask('editing')">🖼 Edit</button>
-      <button class="filter-btn" onclick="quickAddTask('printing')">🖨 Print</button>
-      <button class="filter-btn" onclick="quickAddTask('framing')">🪟 Frame</button>
-      <button class="filter-btn" onclick="quickAddTask('delivery')">📦 Delivery</button>
-      <button class="filter-btn" onclick="quickAddTask('other')">📋 Other</button>
-    </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;" id="cat-filter-bar"></div>
-  </div>
-
-  <!-- Workload strip (unified staff view — active + overdue per person) -->
-  <div id="workload-strip" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;"></div>
-  <!-- Legacy legend kept hidden; workload strip replaces it -->
-  <div id="staff-legend" style="display:none;"></div>
-
-  <!-- Board view -->
-  <div id="board-view">
-    <div class="kanban" id="kanban-board"></div>
-  </div>
-
-  <!-- List view -->
-  <div id="list-view" style="display:none;">
-    <div id="task-list"></div>
-  </div>
-</div> <!-- end section-tasks -->
-
-<!-- 📤 SEND LINK section — today's clients ready for photo delivery -->
-<div id="section-sendlink" style="display:none;">
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
-    <div>
-      <h2 style="margin:0;font-size:18px;">📤 Send Photo Links</h2>
-      <div style="font-size:11px;color:var(--muted);">Clients who visited — paste their Google Drive link and send</div>
-    </div>
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-      <select id="sl2-when" onchange="renderSendLinkTab()" style="padding:6px 12px;font-size:11px;border-radius:16px;border:1px solid var(--border);background:var(--white);">
-        <option value="today">📅 Today</option>
-        <option value="week">This week</option>
-        <option value="pending">All pending</option>
-        <option value="upcoming">📆 Upcoming bookings</option>
-        <option value="sent">✓ Sent</option>
-      </select>
-      <button class="btn btn-sm btn-outline" onclick="openNewSendLink()">+ Manual</button>
-    </div>
-  </div>
-  <div id="sl2-list"></div>
-</div>
-
-<!-- HMU / Photographer section -->
 
 <!-- Inventory section (separate page in sidebar nav) -->
-<!-- 💄 HMU Prep section — calendar of photographer+HMU sessions -->
-<div id="section-hmu" style="display:none;">
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
-    <div>
-      <h2 style="margin:0;font-size:18px;">📸 Shoot Preps</h2>
-      <div style="font-size:11px;color:var(--muted);">Photographer sessions with hair & makeup — click a session to fill in the prep details</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;">
-      <button class="btn btn-sm btn-outline" onclick="hmuMonthShift(-1)">‹</button>
-      <div id="hmu-cal-label" style="font-weight:800;font-size:13px;min-width:130px;text-align:center;"></div>
-      <button class="btn btn-sm btn-outline" onclick="hmuMonthShift(1)">›</button>
-      <button class="btn btn-sm btn-teal" onclick="hmuGoToday()">Today</button>
-    </div>
-  </div>
-  <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
-    <div id="hmu-cal-head" style="display:grid;grid-template-columns:repeat(7,1fr);background:var(--slate);"></div>
-    <div id="hmu-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:minmax(88px,auto);"></div>
-  </div>
-  <div style="display:flex;gap:12px;margin-top:10px;font-size:10px;color:var(--muted);flex-wrap:wrap;">
-    <span>🟡 Prep not started</span><span>🔵 Prep in progress</span><span>🟢 Prep complete</span>
-  </div>
-</div>
-
 <div id="section-inventory" style="display:none;">
   <h2 style="font-size:18px;font-weight:800;margin-bottom:14px;">📦 Monthly Inventory</h2>
   <div id="inventory-section" style="background:linear-gradient(135deg,rgba(81,137,125,0.10),rgba(81,137,125,0.04));border:1.5px solid rgba(81,137,125,0.25);border-radius:12px;padding:14px 16px;margin-bottom:16px;">
@@ -403,83 +302,149 @@ var STAGES = [
   {id:'delivered',  label:'Delivered',   color:'var(--muted)',  bg:'rgba(107,128,128,0.08)'}
 ];
 
+// ── The task types ──────────────────────────────────────────
+//  This board is client work only, so the list is the shape of a job
+//  moving through the studio: shoot → edit → print → frame → hand over.
+//  Anything that isn't client work (bookkeeping, marketing, rotas) is no
+//  longer tracked here — those types are in TASK_TYPES_RETIRED below so
+//  old records still read properly, but they aren't offered any more.
 var TASK_TYPES = {
-  // ── Client Work (revenue-generating, time-sensitive) ──
-  clientjob:   {label:'Client Job',       icon:'🎯', category:'client', categoryLabel:'Client Work'},
-  looklab:     {label:'Look Lab Package', icon:'✨', category:'client', categoryLabel:'Client Work'},
-  editing:     {label:'Photo Editing',    icon:'🖼', category:'client', categoryLabel:'Client Work'},
-  video:       {label:'Video Editing',    icon:'🎬', category:'client', categoryLabel:'Client Work'},
-  printing:    {label:'Printing',         icon:'🖨', category:'client', categoryLabel:'Client Work'},
-  framing:     {label:'Framing',          icon:'🪟', category:'client', categoryLabel:'Client Work'},
-  sendlink:    {label:'Send Link',        icon:'📤', category:'client', categoryLabel:'Client Work'},
-  delivery:    {label:'Delivery/Pickup',  icon:'📦', category:'client', categoryLabel:'Client Work'},
-  retouching:  {label:'Retouching',       icon:'✨', category:'client', categoryLabel:'Client Work'},
-  reshoot:     {label:'Reshoot/Reprint',  icon:'🔁', category:'client', categoryLabel:'Client Work'},
-  followup:    {label:'Client Follow-up', icon:'📞', category:'client', categoryLabel:'Client Work'},
-
-  // ── Content & Marketing ──
-  content:     {label:'Content Creation',     icon:'📷', category:'marketing', categoryLabel:'Content & Marketing'},
-  scheduling:  {label:'Content Scheduling',   icon:'📅', category:'marketing', categoryLabel:'Content & Marketing'},
-  copy:        {label:'Copywriting/Captions', icon:'✍️', category:'marketing', categoryLabel:'Content & Marketing'},
-  reels:       {label:'Reels/TikTok',         icon:'🎞', category:'marketing', categoryLabel:'Content & Marketing'},
-  bts:         {label:'BTS / Behind Scenes',  icon:'🎥', category:'marketing', categoryLabel:'Content & Marketing'},
-  ads:         {label:'Ad Campaign',          icon:'📣', category:'marketing', categoryLabel:'Content & Marketing'},
-  collab:      {label:'Influencer/Collab',    icon:'🤝', category:'marketing', categoryLabel:'Content & Marketing'},
-  newsletter:  {label:'Newsletter/Email',     icon:'📧', category:'marketing', categoryLabel:'Content & Marketing'},
-  seo:         {label:'SEO / Website',        icon:'🌐', category:'marketing', categoryLabel:'Content & Marketing'},
-  review:      {label:'Review Request',       icon:'⭐', category:'marketing', categoryLabel:'Content & Marketing'},
-
-  // ── Studio Operations ──
-  cleaning:    {label:'Studio Cleaning',     icon:'🧹', category:'ops', categoryLabel:'Studio Operations'},
-  inventory:   {label:'Inventory Check',     icon:'📋', category:'ops', categoryLabel:'Studio Operations'},
-  restock:     {label:'Restock Supplies',    icon:'🛒', category:'ops', categoryLabel:'Studio Operations'},
-  equipment:   {label:'Equipment Maint.',    icon:'🔧', category:'ops', categoryLabel:'Studio Operations'},
-  setup:       {label:'Set Design/Setup',    icon:'🎨', category:'ops', categoryLabel:'Studio Operations'},
-  laundry:     {label:'Laundry/Linens',      icon:'👕', category:'ops', categoryLabel:'Studio Operations'},
-  props:       {label:'Props Management',    icon:'🎭', category:'ops', categoryLabel:'Studio Operations'},
-  backup:      {label:'File Backup',         icon:'💾', category:'ops', categoryLabel:'Studio Operations'},
-  archive:     {label:'Archive Old Files',   icon:'🗄', category:'ops', categoryLabel:'Studio Operations'},
-
-  // ── Financial ──
-  invoicing:   {label:'Invoicing',           icon:'🧾', category:'finance', categoryLabel:'Financial'},
-  collections: {label:'Collections/AR',      icon:'💰', category:'finance', categoryLabel:'Financial'},
-  payroll:     {label:'Payroll Prep',        icon:'💵', category:'finance', categoryLabel:'Financial'},
-  bills:       {label:'Bills Payment',       icon:'📃', category:'finance', categoryLabel:'Financial'},
-  bookkeeping: {label:'Bookkeeping',         icon:'📊', category:'finance', categoryLabel:'Financial'},
-  bankrecon:   {label:'Bank Reconciliation', icon:'🏦', category:'finance', categoryLabel:'Financial'},
-  taxes:       {label:'Tax Filing',          icon:'🏛', category:'finance', categoryLabel:'Financial'},
-  budget:      {label:'Budget Review',       icon:'💹', category:'finance', categoryLabel:'Financial'},
-
-  // ── Admin / HR / Staff Development ──
-  training:    {label:'Staff Training',      icon:'🎓', category:'admin', categoryLabel:'Admin & HR'},
-  evaluation:  {label:'Staff Evaluation',    icon:'⭐', category:'admin', categoryLabel:'Admin & HR'},
-  meeting:     {label:'Team Meeting',        icon:'👥', category:'admin', categoryLabel:'Admin & HR'},
-  onboarding:  {label:'New Hire Onboarding', icon:'🆕', category:'admin', categoryLabel:'Admin & HR'},
-  scheduling2: {label:'Staff Scheduling',    icon:'🗓', category:'admin', categoryLabel:'Admin & HR'},
-  policy:      {label:'Policy/SOP Update',   icon:'📜', category:'admin', categoryLabel:'Admin & HR'},
-  research:    {label:'Research / R&D',      icon:'🔬', category:'admin', categoryLabel:'Admin & HR'},
-
-  // ── Other ──
-  other:       {label:'Other',               icon:'📋', category:'other', categoryLabel:'Other'}
+  clientjob:   {label:'Client Job (package)', icon:'🎯', category:'client', categoryLabel:'Client Work'},
+  editing:     {label:'Photo Editing',        icon:'🖼', category:'client', categoryLabel:'Client Work'},
+  video:       {label:'Video Editing',        icon:'🎬', category:'client', categoryLabel:'Client Work'},
+  printing:    {label:'Printing',             icon:'🖨', category:'client', categoryLabel:'Client Work'},
+  framing:     {label:'Framing',              icon:'🪟', category:'client', categoryLabel:'Client Work'},
+  delivery:    {label:'Delivery / Pickup',    icon:'📦', category:'client', categoryLabel:'Client Work'},
+  reshoot:     {label:'Reshoot / Reprint',    icon:'🔁', category:'client', categoryLabel:'Client Work'},
+  followup:    {label:'Client Follow-up',     icon:'📞', category:'client', categoryLabel:'Client Work'},
+  other:       {label:'Other',                icon:'📋', category:'other',  categoryLabel:'Other'}
 };
 
+// Types that used to exist. Not offered in the dropdown, but a task saved
+// under one still shows its proper name instead of falling back to "Other".
+var TASK_TYPES_RETIRED = {
+  looklab:     {label:'Look Lab Package',    icon:'✨', category:'client', categoryLabel:'Client Work'},
+  sendlink:    {label:'Send Link',           icon:'📤', category:'client', categoryLabel:'Client Work'},
+  retouching:  {label:'Retouching',          icon:'✨', category:'client', categoryLabel:'Client Work'},
+  'HMU Prep':  {label:'Shoot Prep',          icon:'📸', category:'client', categoryLabel:'Client Work'},
+  content:     {label:'Content Creation',    icon:'📷', category:'other', categoryLabel:'Other'},
+  scheduling:  {label:'Content Scheduling',  icon:'📅', category:'other', categoryLabel:'Other'},
+  copy:        {label:'Copywriting',         icon:'✍️', category:'other', categoryLabel:'Other'},
+  reels:       {label:'Reels/TikTok',        icon:'🎞', category:'other', categoryLabel:'Other'},
+  bts:         {label:'BTS',                 icon:'🎥', category:'other', categoryLabel:'Other'},
+  ads:         {label:'Ad Campaign',         icon:'📣', category:'other', categoryLabel:'Other'},
+  collab:      {label:'Influencer/Collab',   icon:'🤝', category:'other', categoryLabel:'Other'},
+  newsletter:  {label:'Newsletter/Email',    icon:'📧', category:'other', categoryLabel:'Other'},
+  seo:         {label:'SEO / Website',       icon:'🌐', category:'other', categoryLabel:'Other'},
+  review:      {label:'Review Request',      icon:'⭐', category:'other', categoryLabel:'Other'},
+  cleaning:    {label:'Studio Cleaning',     icon:'🧹', category:'other', categoryLabel:'Other'},
+  inventory:   {label:'Inventory Check',     icon:'📋', category:'other', categoryLabel:'Other'},
+  restock:     {label:'Restock Supplies',    icon:'🛒', category:'other', categoryLabel:'Other'},
+  equipment:   {label:'Equipment Maint.',    icon:'🔧', category:'other', categoryLabel:'Other'},
+  setup:       {label:'Set Design/Setup',    icon:'🎨', category:'other', categoryLabel:'Other'},
+  laundry:     {label:'Laundry/Linens',      icon:'👕', category:'other', categoryLabel:'Other'},
+  props:       {label:'Props Management',    icon:'🎭', category:'other', categoryLabel:'Other'},
+  backup:      {label:'File Backup',         icon:'💾', category:'other', categoryLabel:'Other'},
+  archive:     {label:'Archive Old Files',   icon:'🗄', category:'other', categoryLabel:'Other'},
+  invoicing:   {label:'Invoicing',           icon:'🧾', category:'other', categoryLabel:'Other'},
+  collections: {label:'Collections/AR',      icon:'💰', category:'other', categoryLabel:'Other'},
+  payroll:     {label:'Payroll Prep',        icon:'💵', category:'other', categoryLabel:'Other'},
+  bills:       {label:'Bills Payment',       icon:'📃', category:'other', categoryLabel:'Other'},
+  bookkeeping: {label:'Bookkeeping',         icon:'📊', category:'other', categoryLabel:'Other'},
+  bankrecon:   {label:'Bank Reconciliation', icon:'🏦', category:'other', categoryLabel:'Other'},
+  taxes:       {label:'Tax Filing',          icon:'🏛', category:'other', categoryLabel:'Other'},
+  budget:      {label:'Budget Review',       icon:'💹', category:'other', categoryLabel:'Other'},
+  training:    {label:'Staff Training',      icon:'🎓', category:'other', categoryLabel:'Other'},
+  evaluation:  {label:'Staff Evaluation',    icon:'⭐', category:'other', categoryLabel:'Other'},
+  meeting:     {label:'Team Meeting',        icon:'👥', category:'other', categoryLabel:'Other'},
+  onboarding:  {label:'New Hire Onboarding', icon:'🆕', category:'other', categoryLabel:'Other'},
+  scheduling2: {label:'Staff Scheduling',    icon:'🗓', category:'other', categoryLabel:'Other'},
+  policy:      {label:'Policy/SOP Update',   icon:'📜', category:'other', categoryLabel:'Other'},
+  research:    {label:'Research / R&D',      icon:'🔬', category:'other', categoryLabel:'Other'}
+};
+
+// Types Maan added from the Type dropdown. Stored here so they survive a
+// reload; they sit alongside the built-in ones everywhere types are used.
+var TASK_TYPES_CUSTOM = (function(){
+  try{
+    var raw = localStorage.getItem('cl_task_types');
+    var parsed = raw ? JSON.parse(raw) : null;
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  }catch(e){ return {}; }
+})();
+
+function saveCustomTypes(){
+  try{ localStorage.setItem('cl_task_types', JSON.stringify(TASK_TYPES_CUSTOM)); }catch(e){}
+}
+
+// The types offered in the dropdown: built-in plus anything added by hand.
+function taskTypesOffered(){
+  var out = {};
+  Object.keys(TASK_TYPES).forEach(function(k){ out[k] = TASK_TYPES[k]; });
+  Object.keys(TASK_TYPES_CUSTOM).forEach(function(k){ out[k] = TASK_TYPES_CUSTOM[k]; });
+  return out;
+}
+
+// Add a type of your own from the + beside the Type dropdown. It's saved
+// on this device and offered from then on, so a kind of job the built-in
+// list doesn't cover only has to be named once.
+// Pass a name to add one straight away; called with nothing, it asks.
+function addTaskType(given){
+  var raw = (given !== undefined && given !== null)
+    ? String(given).trim()
+    : (prompt('What do you want to call this type?\n\nStart with an emoji if you want one:\n  ✨ Album Layout\n  🏠 Studio Rental') || '').trim();
+  if(!raw) return;
+  // A leading emoji becomes the icon; the rest is the name. One question
+  // instead of two, and you can leave the emoji off.
+  var icon = '📋', name = raw;
+  var m = raw.match(/^([‍️⃣\p{Extended_Pictographic}]+)\s*(.*)$/u);
+  if(m && m[2]){ icon = m[1]; name = m[2].trim(); }
+
+  var key = name.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if(!key){ notify('Give the type a name with some letters in it', 'error'); return; }
+
+  var existing = TASK_TYPES[key] || TASK_TYPES_CUSTOM[key];
+  if(existing){
+    notify('"' + existing.label + '" is already on the list', 'error');
+    var sel0 = document.getElementById('td-type');
+    if(sel0) sel0.value = key;
+    return;
+  }
+
+  TASK_TYPES_CUSTOM[key] = { label: name, icon: icon, category: 'client', categoryLabel: 'Client Work' };
+  saveCustomTypes();
+
+  // Put it straight into the open dropdown and select it, so you carry on
+  // with the task you were creating rather than starting again.
+  var sel = document.getElementById('td-type');
+  if(sel){
+    var group = sel.querySelector('optgroup[label="Client Work"]') || sel;
+    var opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = icon + ' ' + name;
+    group.appendChild(opt);
+    sel.value = key;
+  }
+  notify('Added "' + name + '" to the type list', 'success');
+}
+
+// One lookup for every type a task might carry — current, custom or retired.
+// Never returns undefined, so a task with a type nobody recognises still
+// renders instead of blanking the card.
+function taskType(key){
+  var k = String(key || '');
+  return TASK_TYPES[k] || TASK_TYPES_CUSTOM[k] || TASK_TYPES_RETIRED[k] ||
+         { label: k || 'Other', icon: '📋', category: 'other', categoryLabel: 'Other' };
+}
+
 var TASK_CATEGORIES = [
-  {id:'all',       label:'All',            icon:'📋'},
   {id:'client',    label:'Client Work',    icon:'👤'},
-  {id:'marketing', label:'Content & Marketing', icon:'📣'},
-  {id:'ops',       label:'Studio Ops',     icon:'🏠'},
-  {id:'finance',   label:'Financial',      icon:'💰'},
-  {id:'admin',     label:'Admin & HR',     icon:'⚙'},
   {id:'other',     label:'Other',          icon:'📌'}
 ];
 
 var TASKS = [];
 var _lastSaveTime = 0;
-var CUR_VIEW = 'board';
-var CUR_FILTER = 'today';
-var CUR_CATEGORY = 'all';
 var CUR_STAFF = '';
-var SHOW_ARCHIVED = false;
 var CLIENTS = [];
 var TC_STAFF = []; // Staff loaded from TimeCommand
 
@@ -652,7 +617,6 @@ function loadClients(){
 
       // Also extract from registrations
       if(Array.isArray(parsed.registrations)){
-        slSetRegistrations(parsed.registrations);
         parsed.registrations.forEach(function(r){
           var key = (r.fbName||'').toLowerCase();
           if(key && !existingNames[key]){
@@ -703,7 +667,6 @@ async function syncAll(){
 
       // 2. Registrations
       if(Array.isArray(r.registrations)){
-        slSetRegistrations(r.registrations);
         r.registrations.forEach(function(reg){
           var key = (reg.fbName||'').trim().toLowerCase();
           if(key && !clientMap[key]){
@@ -727,7 +690,6 @@ async function syncAll(){
 
       // 4. Acknowledgements
       if(Array.isArray(r.acknowledgements)){
-        slSetBookings(r.acknowledgements);
         r.acknowledgements.forEach(function(a){
           var key = (a.fbName||'').trim().toLowerCase();
           if(key && !clientMap[key]){
@@ -746,7 +708,6 @@ async function syncAll(){
       updateClientCount();
       updateLastSync();
       render();
-      refreshSendLinkIfActive();
     } else {
       notify('Sync failed: '+(r.error||'Unknown'),'error');
     }
@@ -781,82 +742,8 @@ async function pushTask(task, isNew){
   }
 }
 
-// ================================================================
-//  VIEWS
-// ================================================================
-function setView(v){
-  CUR_VIEW = v;
-  document.getElementById('board-view').style.display = v==='board' ? '' : 'none';
-  document.getElementById('list-view').style.display  = v==='list'  ? '' : 'none';
-  document.getElementById('view-board-btn').className = v==='board' ? 'btn btn-sm btn-teal' : 'btn btn-sm btn-outline';
-  document.getElementById('view-list-btn').className  = v==='list'  ? 'btn btn-sm btn-teal' : 'btn btn-sm btn-outline';
-  render();
-}
-
-function setFilter(f){
-  CUR_FILTER = f;
-  document.querySelectorAll('.filter-btn').forEach(function(btn){
-    btn.classList.toggle('active', btn.dataset.f === f);
-  });
-  render();
-}
-
-function setCategory(c){
-  CUR_CATEGORY = c;
-  document.querySelectorAll('.cat-btn').forEach(function(btn){
-    btn.classList.toggle('active', btn.dataset.c === c);
-  });
-  render();
-}
-
-function setStaffFilter(s){
-  CUR_STAFF = s || '';
-  render();
-}
-
-function renderCategoryBar(){
-  var bar = document.getElementById('cat-filter-bar');
-  if(!bar) return;
-  // Count tasks per category (only active ones)
-  var allActive = (TASKS||[]).filter(function(t){ return !t.archived; });
-  bar.innerHTML = TASK_CATEGORIES.map(function(c){
-    var count = c.id==='all' ? allActive.length : allActive.filter(function(t){
-      var tc = (TASK_TYPES[t.type] && TASK_TYPES[t.type].category) || 'other';
-      return tc === c.id;
-    }).length;
-    var active = CUR_CATEGORY === c.id;
-    return '<button class="cat-btn filter-btn'+(active?' active':'')+'" data-c="'+c.id+'" onclick="setCategory(\''+c.id+'\')">'+c.icon+' '+c.label+(count?' <span style="opacity:.6;font-size:10px;margin-left:2px;">'+count+'</span>':'')+'</button>';
-  }).join('');
-}
-
-function populateStaffFilter(){
-  var sel = document.getElementById('staff-filter');
-  if(!sel) return;
-  var current = sel.value;
-  // Merge TC_STAFF + any assignedTo names found in tasks
-  var names = TC_STAFF.map(function(s){ return s.name; });
-  (TASKS||[]).forEach(function(t){
-    if(t.assignedTo && names.indexOf(t.assignedTo)===-1) names.push(t.assignedTo);
-  });
-  names.sort();
-  sel.innerHTML = '<option value="">All staff</option>' +
-    '<option value="__unassigned">— Unassigned —</option>' +
-    names.map(function(n){ return '<option value="'+escHtml(n)+'">'+escHtml(n)+'</option>'; }).join('');
-  sel.value = current;
-}
-
-function toggleArchived(){
-  SHOW_ARCHIVED = !SHOW_ARCHIVED;
-  var btn = document.getElementById('view-archive-btn');
-  if(btn){
-    btn.textContent = SHOW_ARCHIVED ? '📋 Active Tasks' : '📦 Archived';
-    btn.className = SHOW_ARCHIVED ? 'btn btn-sm btn-teal' : 'btn btn-sm btn-outline';
-  }
-  render();
-}
-
 function switchSection(name){
-  ['jobs','tasks','inventory','settings','hmu','sendlink'].forEach(function(s){
+  ['jobs','inventory','settings'].forEach(function(s){
     var pnl = document.getElementById('section-'+s);
     if(pnl) pnl.style.display = (s === name) ? '' : 'none';
   });
@@ -870,14 +757,6 @@ function switchSection(name){
     populateInventoryChecker();
     renderInventory();
   }
-  if(name === 'sendlink'){
-    renderSendLinkTab();
-  }
-  if(name === 'hmu'){
-    hmuMarkSeen();
-    renderHmuCalendar();
-  }
-  if(name === 'tasks') render();
   // Close mobile sidebar after selecting
   var sb = document.getElementById('sidebar');
   if(sb) sb.classList.remove('open');
@@ -936,19 +815,13 @@ function loadTimeCommandStaff(){
 // ================================================================
 //  RENDER
 // ================================================================
+// The one refresh entry point. Client Jobs is the only task screen now,
+// so everything that used to draw the board has gone with it.
 function render(){
   autoPromoteTasks();
   migrateLegacyStages();
-  renderCategoryBar();
-  populateStaffFilter();
-  renderWorkloadStrip();
-  renderWeekDonePill();
-  renderStaffLegend();
-  if (typeof slUpdateBadge === 'function') slUpdateBadge();
   renderInventory();
   if(typeof renderClientJobs === 'function') renderClientJobs();
-  if(CUR_VIEW === 'board') renderKanban();
-  else renderList();
 }
 
 var CUR_SEARCH = '';
@@ -959,7 +832,7 @@ function toggleMoreTools(){
   d.style.display = open ? '' : 'none';
   if(b) b.classList.toggle('active', open);
 }
-function setSearch(q){ CUR_SEARCH = String(q||'').trim().toLowerCase(); if(CUR_VIEW==='board') renderKanban(); else renderList(); }
+function setSearch(q){ CUR_SEARCH = String(q||'').trim().toLowerCase(); render(); }
 
 // Days-in-stage aging label for a card
 function taskAgeLabel(t){
@@ -973,45 +846,7 @@ function taskAgeLabel(t){
 }
 
 // Manager view: active + overdue count per staff
-function renderWorkloadStrip(){
-  var el = document.getElementById('workload-strip');
-  if(!el) return;
-  var today = todayStr();
-  var stats = {};
-  (TASKS||[]).filter(function(t){ return !t.archived && t.type!=='sendlink' && t.stage!=='delivered'; }).forEach(function(t){
-    var who = t.assignedTo || '— Unassigned';
-    if(!stats[who]) stats[who] = { active:0, overdue:0 };
-    stats[who].active++;
-    if(t.dueDate && t.dueDate < today) stats[who].overdue++;
-  });
-  var names = Object.keys(stats).sort(function(a,b){ return stats[b].active - stats[a].active; });
-  if(!names.length){ el.innerHTML=''; return; }
-  el.innerHTML = names.map(function(n){
-    var s = stats[n];
-    var sc = staffColor(n==='— Unassigned'?'':n);
-    return '<div style="display:flex;align-items:center;gap:6px;background:var(--white);border:1px solid var(--border);border-radius:20px;padding:4px 12px 4px 4px;font-size:11px;">'+
-      '<span style="width:20px;height:20px;border-radius:50%;background:'+(n==='— Unassigned'?'#d0d0d0':sc.bg)+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;">'+(n==='— Unassigned'?'?':n.charAt(0).toUpperCase())+'</span>'+
-      '<strong>'+escHtml(n)+'</strong>'+
-      '<span style="color:var(--muted);">'+s.active+' active</span>'+
-      (s.overdue?'<span style="color:var(--danger);font-weight:700;">· '+s.overdue+' overdue</span>':'')+
-    '</div>';
-  }).join('');
-}
-
 // This week's completed count
-function renderWeekDonePill(){
-  var el = document.getElementById('week-done-pill');
-  if(!el) return;
-  var now = new Date();
-  var monday = new Date(now); monday.setDate(now.getDate() - ((now.getDay()+6)%7)); monday.setHours(0,0,0,0);
-  var count = (TASKS||[]).filter(function(t){
-    if(t.stage!=='delivered' && !t.completedAt) return false;
-    var c = new Date(t.completedAt||t.updatedAt);
-    return !isNaN(c) && c >= monday;
-  }).length;
-  el.textContent = '✓ '+count+' done this week';
-}
-
 // Quick-add a pre-typed task
 function quickAddTask(type){
   var labels = { editing:'Photo Editing', printing:'Printing', framing:'Framing', delivery:'Delivery/Pickup', other:'Task' };
@@ -1063,48 +898,6 @@ function autoPromoteTasks(){
     }
   });
   if(changed) saveTasks();
-}
-
-function renderStaffLegend(){
-  var el = document.getElementById('staff-legend');
-  if(!el) return;
-  var taskAssigned = {};
-  (TASKS||[]).filter(function(t){ return !t.archived; }).forEach(function(t){
-    if(t.assignedTo) taskAssigned[t.assignedTo] = (taskAssigned[t.assignedTo]||0)+1;
-  });
-  // Union with TC_STAFF
-  var allNames = Object.keys(taskAssigned);
-  TC_STAFF.forEach(function(s){ if(allNames.indexOf(s.name)===-1) allNames.push(s.name); });
-  allNames.sort();
-
-  if(!allNames.length){
-    el.style.display = 'none';
-    return;
-  }
-  el.style.display = '';
-  el.innerHTML =
-    '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-right:4px;">Staff:</span>' +
-    allNames.map(function(name){
-      var c = staffColor(name);
-      var count = taskAssigned[name] || 0;
-      return '<span onclick="setStaffFilter(\''+name.replace(/'/g,"\\'")+'\');document.getElementById(\'staff-filter\').value=\''+name.replace(/'/g,"\\'")+'\'" style="display:inline-flex;align-items:center;gap:5px;background:'+c.bg+';color:'+c.fg+';padding:3px 9px;border-radius:12px;font-size:11px;font-weight:600;cursor:pointer;line-height:1.2;" title="Click to filter">'+
-        '<span style="width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,0.25);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">'+staffInitials(name)+'</span>'+
-        escHtml(name)+
-        (count?'<span style="opacity:.75;font-size:10px;">'+count+'</span>':'')+
-      '</span>';
-    }).join('') +
-    '<button onclick="openColorPicker()" style="margin-left:auto;background:transparent;border:1px dashed var(--border);color:var(--muted);font-size:10px;padding:3px 9px;border-radius:12px;cursor:pointer;">🎨 Customize Colors</button>';
-}
-
-function openNewSendLink(){
-  // Open new task modal pre-set to sendlink type, due today
-  openTaskDetail(null);
-  setTimeout(function(){
-    var typeSel = document.getElementById('td-type');
-    if(typeSel) typeSel.value = 'sendlink';
-    var dueInp = document.getElementById('td-due');
-    if(dueInp && !dueInp.value) dueInp.value = todayStr();
-  }, 60);
 }
 
 // ── MONTHLY INVENTORY MANAGEMENT ──
@@ -2213,158 +2006,6 @@ function resetStaffColor(name){
   render();
 }
 
-function getFilteredTasks(){
-  var tasks = TASKS.filter(function(t){
-    if(SHOW_ARCHIVED) return t.archived;
-    return !t.archived;
-  });
-  // Always exclude sendlink from main board — they live in their own section
-  tasks = tasks.filter(function(t){ return t.type !== 'sendlink'; });
-  if(CUR_FILTER !== 'all'){
-    if(CUR_FILTER === 'overdue'){
-      var today = todayStr();
-      tasks = tasks.filter(function(t){ return t.dueDate && t.dueDate < today && t.stage !== 'delivered'; });
-    } else if(CUR_FILTER === 'today'){
-      // Today view: due today OR overdue OR undated-but-active — the "what do I do now" set
-      var tdy = todayStr();
-      tasks = tasks.filter(function(t){
-        if(t.stage === 'delivered') return false;
-        if(!t.dueDate) return t.stage !== 'delivered';        // undated active work stays visible
-        return t.dueDate <= tdy;                               // due today or overdue
-      });
-    } else {
-      tasks = tasks.filter(function(t){ return t.stage === CUR_FILTER; });
-    }
-  }
-  if(CUR_CATEGORY !== 'all'){
-    tasks = tasks.filter(function(t){
-      var tc = (TASK_TYPES[t.type] && TASK_TYPES[t.type].category) || 'other';
-      return tc === CUR_CATEGORY;
-    });
-  }
-  if(CUR_STAFF){
-    if(CUR_STAFF === '__unassigned') tasks = tasks.filter(function(t){ return !t.assignedTo; });
-    else tasks = tasks.filter(function(t){ return t.assignedTo === CUR_STAFF; });
-  }
-  // Free-text search across client, title, type, notes
-  if(CUR_SEARCH){
-    tasks = tasks.filter(function(t){
-      var hay = (String(t.client||'')+' '+String(t.title||'')+' '+String(t.type||'')+' '+String(t.notes||'')).toLowerCase();
-      return hay.indexOf(CUR_SEARCH) > -1;
-    });
-  }
-  // Sort: overdue first (oldest due first), then by due date, then undated last
-  var _today = todayStr();
-  tasks.sort(function(a,b){
-    var ao = a.dueDate && a.dueDate < _today && a.stage!=='delivered';
-    var bo = b.dueDate && b.dueDate < _today && b.stage!=='delivered';
-    if(ao !== bo) return ao ? -1 : 1;           // overdue floats up
-    var ad = a.dueDate || '9999-99-99';
-    var bd = b.dueDate || '9999-99-99';
-    return ad.localeCompare(bd);                  // then soonest due first
-  });
-  return tasks;
-}
-
-function renderKanban(){
-  var el = document.getElementById('kanban-board');
-  var tasks = getFilteredTasks();
-  var today = todayStr();
-
-  var html = '';
-  STAGES.forEach(function(stage){
-    var stageTasks = tasks.filter(function(t){ return t.stage === stage.id; });
-    html += '<div class="kanban-col">';
-    html += '<div class="kanban-col-hdr" style="background:'+stage.bg+';color:'+stage.color+';">'+
-      '<span>'+stage.label+'</span>'+
-      '<span style="font-size:10px;opacity:0.7;">'+stageTasks.length+'</span>'+
-    '</div>';
-    stageTasks.forEach(function(t){
-      var type = TASK_TYPES[t.type]||TASK_TYPES.other;
-      var isOverdue = t.dueDate && t.dueDate < today && t.stage !== 'delivered';
-      var sc = staffColor(t.assignedTo);
-      var stripeColor = t.assignedTo ? sc.bg : '#d0d0d0';
-      var isDone = t.stage === 'delivered' || t.done;
-      // Build timestamp display
-      var ts = '';
-      if(t.createdAt) ts += '<span title="Created" style="font-size:9px;color:var(--muted);">🕐 '+fmtTs(t.createdAt)+'</span>';
-      if(t.completedAt) ts += '<span title="Completed" style="font-size:9px;color:var(--success);margin-left:8px;">✓ '+fmtTs(t.completedAt)+'</span>';
-      html += '<div class="task-card'+(isDone?' tc-done':'')+(isOverdue?' tc-overdue':'')+(llIs(t)&&!isDone?' tc-looklab':'')+'" data-tid="'+t.id+'" style="border-left:4px solid '+(isOverdue?'#c0544a':stripeColor)+';" onclick="openTaskDetail(this.dataset.tid)">'+
-        (isOverdue ? '<div style="font-size:9px;font-weight:800;color:#fff;background:#c0544a;border-radius:4px;padding:2px 6px;display:inline-block;margin-bottom:6px;letter-spacing:.5px;">⚠ OVERDUE</div>' : '')+
-        '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">'+
-          '<input type="checkbox" class="tc-check" '+(isDone?'checked':'')+' onclick="event.stopPropagation();toggleTaskDone(\''+t.id+'\',this.checked);" title="Mark done">'+
-          staffAvatar(t.assignedTo, 26)+
-          '<div style="flex:1;min-width:0;">'+
-            '<div class="tc-title" style="margin-bottom:2px;">'+type.icon+' '+escHtml(type.label)+'</div>'+
-            (t.title ? '<div style="font-size:11px;color:var(--slate);margin-bottom:2px;">'+escHtml(t.title)+'</div>' : '')+
-            '<div class="tc-client">'+escHtml(t.client||'No client')+'</div>'+
-          '</div>'+
-        '</div>'+
-        '<div class="tc-meta">'+
-          '<span class="tc-badge" style="background:'+stage.bg+';color:'+stage.color+';">'+stage.label+'</span>'+
-          (t.dueDate ? '<span class="tc-badge" style="background:'+(isOverdue?'rgba(192,84,74,0.1)':'var(--light)')+';color:'+(isOverdue?'var(--danger)':'var(--muted)')+';">📅 '+t.dueDate+'</span>' : '')+
-          (t.priority==='high' ? '<span class="tc-badge" style="background:rgba(192,84,74,0.1);color:var(--danger);">🔴 High</span>' : '')+
-          (t.driveLink ? '<span class="tc-badge" style="background:rgba(81,137,125,0.1);color:var(--teal);">📂 Drive</span>' : '')+
-          llBadge(t)+
-          taskAgeLabel(t)+
-        '</div>'+
-        (!t.assignedTo ? '<button onclick="event.stopPropagation();grabTask(\''+t.id+'\')" style="margin-top:8px;width:100%;padding:6px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">✋ Assign to me</button>' : '')+
-        (ts ? '<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);">'+ts+'</div>' : '')+
-      '</div>';
-    });
-    if(!stageTasks.length){
-      html += '<div class="tm" style="font-size:11px;">No tasks</div>';
-    }
-    html += '</div>';
-  });
-  el.innerHTML = html;
-}
-
-function renderList(){
-  var el = document.getElementById('task-list');
-  var tasks = getFilteredTasks();
-  var today = todayStr();
-
-  if(!tasks.length){ el.innerHTML='<div class="tm">No tasks found.</div>'; return; }
-
-  var html = '';
-  tasks.sort(function(a,b){
-    var sa = STAGES.findIndex(function(s){return s.id===a.stage;});
-    var sb = STAGES.findIndex(function(s){return s.id===b.stage;});
-    return sa - sb || String(a.dueDate||'').localeCompare(String(b.dueDate||''));
-  });
-
-  tasks.forEach(function(t){
-    var stage = STAGES.find(function(s){return s.id===t.stage;})||STAGES[0];
-    var type = TASK_TYPES[t.type]||TASK_TYPES.other;
-    var isOverdue = t.dueDate && t.dueDate < today && t.stage !== 'delivered';
-
-    var sc = staffColor(t.assignedTo);
-    var stripeColor = t.assignedTo ? sc.bg : '#d0d0d0';
-    var isDone = t.stage === 'delivered' || t.done;
-    var ts = '';
-    if(t.createdAt) ts += '🕐 '+fmtTs(t.createdAt);
-    if(t.completedAt) ts += '  ·  ✓ '+fmtTs(t.completedAt);
-    html += '<div class="task-list-item'+(isDone?' tc-done':'')+(llIs(t)&&!isDone?' tc-looklab':'')+'" data-tid="'+t.id+'" style="border-left:4px solid '+(llIs(t)&&!isDone?'#f0a44a':stripeColor)+';" onclick="openTaskDetail(this.dataset.tid)">'+
-      '<input type="checkbox" class="tc-check" '+(isDone?'checked':'')+' onclick="event.stopPropagation();toggleTaskDone(\''+t.id+'\',this.checked);" title="Mark done">'+
-      staffAvatar(t.assignedTo, 28)+
-      '<div style="flex:1;min-width:0;">'+
-        '<div style="font-weight:600;font-size:13px;color:var(--slate);">'+type.icon+' '+escHtml(type.label)+'</div>'+
-        (t.title ? '<div style="font-size:11px;color:var(--slate);margin-top:1px;">'+escHtml(t.title)+'</div>' : '')+
-        '<div style="font-size:10px;color:var(--muted);margin-top:2px;">'+escHtml(t.client||'—')+
-          (t.assignedTo ? ' · '+escHtml(t.assignedTo) : '')+
-          (t.dueDate ? ' · 📅 '+t.dueDate : '')+
-          (ts ? ' · '+ts : '')+
-        '</div>'+
-      '</div>'+
-      llBadge(t)+
-      '<span class="tc-badge" style="background:'+stage.bg+';color:'+stage.color+';flex-shrink:0;">'+stage.label+'</span>'+
-      (isOverdue ? '<span class="tc-badge" style="background:rgba(192,84,74,0.1);color:var(--danger);flex-shrink:0;">Overdue</span>' : '')+
-    '</div>';
-  });
-  el.innerHTML = '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">'+html+'</div>';
-}
-
 // ================================================================
 //  TASK DETAIL / NEW
 // ================================================================
@@ -2454,7 +2095,7 @@ function renderReportBody(){
     var who = t.assignedTo || '— Unassigned —';
     if(!staffMap[who]) staffMap[who] = {assigned:0, done:0, open:0, overdue:0, onTime:0, byCat:{}};
     staffMap[who].assigned++;
-    var cat = (TASK_TYPES[t.type] && TASK_TYPES[t.type].category) || 'other';
+    var cat = taskType(t.type).category;
     staffMap[who].byCat[cat] = (staffMap[who].byCat[cat]||0)+1;
     if(t.stage === 'delivered'){
       staffMap[who].done++;
@@ -2477,7 +2118,7 @@ function renderReportBody(){
   // Category breakdown
   var catMap = {};
   inRange.forEach(function(t){
-    var cat = (TASK_TYPES[t.type] && TASK_TYPES[t.type].category) || 'other';
+    var cat = taskType(t.type).category;
     if(!catMap[cat]) catMap[cat] = {total:0, done:0};
     catMap[cat].total++;
     if(t.stage === 'delivered') catMap[cat].done++;
@@ -2572,11 +2213,15 @@ function openTaskDetail(id){
 
   var typeOpts = '';
   // Group types by category for cleaner dropdown
+  var OFFERED = taskTypesOffered();
+  // A task saved under a type that's no longer offered still needs its own
+  // option, or opening it would silently change what it is.
+  if(t && t.type && !OFFERED[t.type]) OFFERED[t.type] = taskType(t.type);
   var byCat = {};
-  Object.keys(TASK_TYPES).forEach(function(k){
-    var cat = TASK_TYPES[k].categoryLabel || 'Other';
+  Object.keys(OFFERED).forEach(function(k){
+    var cat = OFFERED[k].categoryLabel || 'Other';
     if(!byCat[cat]) byCat[cat] = [];
-    byCat[cat].push({key:k, type:TASK_TYPES[k]});
+    byCat[cat].push({key:k, type:OFFERED[k]});
   });
   Object.keys(byCat).forEach(function(catLabel){
     typeOpts += '<optgroup label="'+escHtml(catLabel)+'">';
@@ -2635,7 +2280,12 @@ function openTaskDetail(id){
     tsPanel +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
       '<div class="field"><label>Type *</label>'+
-        '<select id="td-type" class="sinput">'+typeOpts+'</select></div>'+
+        '<div style="display:flex;gap:6px;">'+
+          '<select id="td-type" class="sinput" style="flex:1;min-width:0;">'+typeOpts+'</select>'+
+          '<button type="button" onclick="addTaskType()" title="Add a type of your own" '+
+            'style="flex-shrink:0;border:1px dashed var(--border);background:transparent;color:var(--muted);'+
+            'border-radius:8px;padding:0 11px;font-size:16px;line-height:1;cursor:pointer;">+</button>'+
+        '</div></div>'+
       '<div class="field"><label>Client</label>'+
         '<select id="td-client" class="sinput" onchange="showTaskClientInfo()">'+clientOpts+'</select></div>'+
     '</div>'+
@@ -2660,11 +2310,20 @@ function openTaskDetail(id){
     '</div>'+
     '<div class="field" id="td-photos-group" style="display:'+((t&&t.type==='editing')?'':'none')+';"><label>📸 Photos for Editing</label>'+
       '<textarea id="td-photos" class="sinput" rows="3" style="resize:vertical;" placeholder="List file names, Drive folder link, or which shots the client picked for editing…">'+escHtml(t?t.photosForEditing||'':'')+'</textarea></div>'+
-    '<div class="field"><label>Google Drive Link</label>'+
+    '<div class="field"><label>\ud83d\udcc2 Gallery folder <span style="color:var(--muted);font-weight:400;font-size:11px;">(Google Drive)</span></label>'+
       '<div style="display:flex;gap:8px;">'+
         '<input type="url" id="td-drive" class="sinput" value="'+escHtml(t?t.driveLink||'':'')+'" placeholder="https://drive.google.com/..." style="flex:1;">'+
-        '<a id="td-drive-open" href="'+(t&&t.driveLink?escHtml(t.driveLink):'#')+'" target="_blank" class="btn btn-sm btn-teal" style="white-space:nowrap;text-decoration:none;padding:8px 12px;display:'+(t&&t.driveLink?'inline-flex':'none')+';">📂 Open</a>'+
-      '</div></div>'+
+        '<a id="td-drive-open" href="'+(t&&t.driveLink?escHtml(t.driveLink):'#')+'" target="_blank" class="btn btn-sm btn-teal" style="white-space:nowrap;text-decoration:none;padding:8px 12px;display:'+(t&&t.driveLink?'inline-flex':'none')+';">\ud83d\udcc2 Open</a>'+
+      '</div>'+
+      (t&&t.driveLinkSentDate ? '<div style="font-size:10.5px;color:var(--success);font-weight:700;margin-top:4px;">\u2713 sent '+escHtml(t.driveLinkSentDate)+'</div>' : '')+
+    '</div>'+
+    '<div class="field"><label>\u2728 Edited photos <span style="color:var(--muted);font-weight:400;font-size:11px;">(the finished edits to hand over)</span></label>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<input type="url" id="td-edited" class="sinput" value="'+escHtml(t?t.editedLink||'':'')+'" placeholder="https://..." style="flex:1;">'+
+        '<a id="td-edited-open" href="'+(t&&t.editedLink?escHtml(t.editedLink):'#')+'" target="_blank" class="btn btn-sm btn-teal" style="white-space:nowrap;text-decoration:none;padding:8px 12px;display:'+(t&&t.editedLink?'inline-flex':'none')+';">\u2728 Open</a>'+
+      '</div>'+
+      (t&&t.editedSentDate ? '<div style="font-size:10.5px;color:var(--success);font-weight:700;margin-top:4px;">\u2713 sent '+escHtml(t.editedSentDate)+'</div>' : '')+
+    '</div>'+
     buildSendSection(t)+
     '<div class="field"><label>Notes</label>'+
       '<textarea id="td-notes" class="sinput" rows="3" style="resize:vertical;">'+escHtml(t?t.notes||'':'')+'</textarea></div>'+
@@ -2703,19 +2362,16 @@ function openTaskDetail(id){
     var sendBtn = document.getElementById('td-send-link');
     if(sendBtn) sendBtn.addEventListener('click', function(){ sendDriveLink(t.id); });
     // Update Open button when drive link changes
-    var driveInput = document.getElementById('td-drive');
-    var openBtn = document.getElementById('td-drive-open');
-    if(driveInput && openBtn){
-      driveInput.addEventListener('input', function(){
-        var val = driveInput.value.trim();
-        if(val){
-          openBtn.href = val;
-          openBtn.style.display = 'inline-flex';
-        } else {
-          openBtn.style.display = 'none';
-        }
+    ['drive','edited'].forEach(function(which){
+      var inp = document.getElementById('td-'+which);
+      var btn = document.getElementById('td-'+which+'-open');
+      if(!inp || !btn) return;
+      inp.addEventListener('input', function(){
+        var val = inp.value.trim();
+        if(val){ btn.href = val; btn.style.display = 'inline-flex'; }
+        else { btn.style.display = 'none'; }
       });
-    }
+    });
   }, 50);
 }
 
@@ -3611,9 +3267,24 @@ function cjToggleDone(){
   renderClientJobs();
 }
 
+// Anything that counts as client work belongs on this screen. That's every
+// package job, plus one-off jobs — a reprint, a follow-up call, an edit with
+// no package behind it. This is the only task screen now, so a task that
+// didn't show here would be a task nobody ever sees again.
+function cjIsClientWork(t){
+  if(!t) return false;
+  if(llIs(t)) return true;                       // a package job, tagged in the notes
+  return taskType(t.type).category === 'client';
+}
+
+// A package job carries a checklist; a one-off doesn't.
+function cjHasChecklist(t){
+  return llParse(t.notes).total > 0;
+}
+
 function cjJobs(){
   return (TASKS||[]).filter(function(t){
-    if(!llIs(t) || t.archived) return false;
+    if(!cjIsClientWork(t) || t.archived) return false;
     if(!CJ_SEARCH) return true;
     var hay = (String(t.client||'')+' '+String(t.title||'')+' '+String(t.notes||'')).toLowerCase();
     return hay.indexOf(CJ_SEARCH) > -1;
@@ -3643,7 +3314,13 @@ function renderClientJobs(){
     var overdue = t.dueDate && t.dueDate < today;
     var needsCheck = /CHECK THE PACKAGE/i.test(String(t.notes||''));
     if(overdue || needsCheck) late.push(t);
-    else if(p.total && p.done > 0) hot.push(t);
+    // A package job is "in progress" once a box is ticked. A one-off has no
+    // boxes, so it counts as started when somebody has taken it on or a link
+    // has gone up. Deliberately NOT its stage: autoPromoteTasks() flips that
+    // to "inprogress" on the due date alone, which says nothing about whether
+    // anyone has touched it.
+    else if(p.total ? p.done > 0
+                    : !!(t.assignedTo || t.driveLink || t.editedLink)) hot.push(t);
     else rest.push(t);
   });
   var byDue = function(a,b){ return String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999')); };
@@ -3664,7 +3341,8 @@ function renderClientJobs(){
 
   if(!live.length && !done.length){
     el.innerHTML = '<div class="cj-empty">No client jobs yet.<br><br>' +
-      'They appear here automatically when a booking is confirmed.</div>';
+      'They appear here automatically when a booking is confirmed, ' +
+      'or add one by hand with the button above.</div>';
     return;
   }
 
@@ -3683,8 +3361,9 @@ function cjCard(t){
   var today = todayStr();
   var overdue = t.dueDate && t.dueDate < today && !cjIsDone(t);
   var needsCheck = /CHECK THE PACKAGE/i.test(String(t.notes||''));
-  var pct = p.total ? Math.round(p.done / p.total * 100) : 0;
-  var allDone = p.total > 0 && p.done === p.total;
+  var hasList = p.total > 0;
+  var pct = hasList ? Math.round(p.done / p.total * 100) : 0;
+  var allDone = hasList && p.done === p.total;
   var cls = cjIsDone(t) ? 'cj-ok' : (overdue ? 'cj-late' : (needsCheck ? 'cj-hot' : ''));
 
   var rows = p.items.map(function(it, i){
@@ -3692,34 +3371,82 @@ function cjCard(t){
       '<input type="checkbox" id="cjb-'+t.id+'-'+i+'" '+(it.done?'checked':'')+
         ' onchange="cjToggle(\''+t.id+'\','+i+',this.checked)">'+
       '<label for="cjb-'+t.id+'-'+i+'"><span>'+escHtml(it.text)+'</span></label>'+
+      '<button class="cj-x" title="Remove this from the list" '+
+        'onclick="cjDelItem(\''+t.id+'\','+i+')">×</button>'+
     '</div>';
   }).join('');
 
+  // Anything on this job that isn't a tick box — the package name is already
+  // in the header, so this is the free text you or the booking left behind.
+  var loose = String(t.notes||'').split('\n').filter(function(l){
+    if(/^\s*\[[ xX]\]/.test(l)) return false;
+    var x = l.trim();
+    if(!x || x === '—') return false;
+    if(x.indexOf(CJ_TAG) !== -1 || x.indexOf(LL_TAG) !== -1) return false;
+    return x !== (p.pkg||'').trim();
+  }).join(' · ').slice(0, 220);
+
   // The package line: the job's own header line, minus the client name
-  var pkg = p.pkg || String(t.title||'');
+  var pkg = p.pkg || String(t.title||'') || taskType(t.type).label;
+  var kind = taskType(t.type);
 
   return '<div class="cj-card '+cls+'" data-cjid="'+t.id+'">'+
     '<div class="cj-top">'+
       '<div style="min-width:0;flex:1;">'+
         '<div class="cj-who">'+escHtml(t.client||'No client')+'</div>'+
-        '<div class="cj-pkg">'+escHtml(pkg)+'</div>'+
+        '<div class="cj-pkg">'+(hasList?'':kind.icon+' ')+escHtml(pkg)+'</div>'+
       '</div>'+
-      '<div class="cj-pct"><b>'+p.done+'/'+p.total+'</b><span>'+(allDone?'all done':'done')+'</span></div>'+
+      (hasList ? '<div class="cj-pct"><b>'+p.done+'/'+p.total+'</b><span>'+(allDone?'all done':'done')+'</span></div>' : '')+
     '</div>'+
-    '<div class="cj-bar"><i class="'+(allDone?'full':'')+'" style="width:'+pct+'%;"></i></div>'+
+    (hasList ? '<div class="cj-bar"><i class="'+(allDone?'full':'')+'" style="width:'+pct+'%;"></i></div>' : '')+
     (needsCheck ? '<div class="cj-warn">⚠ This package\'s inclusions aren\'t on file — confirm what this client is owed before you start.</div>' : '')+
+    (!hasList && loose ? '<div class="cj-note">'+escHtml(loose)+'</div>' : '')+
     rows+
+    '<button class="cj-add" onclick="cjAddItem(\''+t.id+'\')">+ Add something to do</button>'+
+    cjLinks(t)+
     '<div class="cj-foot">'+
       (t.dueDate ? '<span class="tc-badge" style="background:'+(overdue?'rgba(192,84,74,.1)':'var(--light)')+';color:'+(overdue?'var(--danger)':'var(--muted)')+';">'+(overdue?'⚠ due ':'📅 due ')+t.dueDate+'</span>' : '')+
       (t.assignedTo ? '<span class="tc-badge" style="background:var(--light);color:var(--muted);">'+escHtml(t.assignedTo)+'</span>'
                     : '<button class="btn btn-sm btn-outline" onclick="grabTask(\''+t.id+'\')">✋ Assign to me</button>')+
-      (allDone && !cjIsDone(t) ? '<button class="btn btn-sm btn-teal" onclick="cjHandOver(\''+t.id+'\')">✓ Mark handed over</button>' : '')+
+      ((hasList ? allDone : true) && !cjIsDone(t) ? '<button class="btn btn-sm btn-teal" onclick="cjHandOver(\''+t.id+'\')">✓ Mark handed over</button>' : '')+
       '<span style="flex:1;"></span>'+
       '<button class="btn btn-sm btn-outline" onclick="openTaskDetail(\''+t.id+'\')">Open</button>'+
       '<button class="cj-del" title="Delete this job" onclick="cjDelete(\''+t.id+'\')">🗑</button>'+
     '</div>'+
   '</div>';
 }
+
+// ── The two photo links ─────────────────────────────────────────
+//  Every job ends the same way: the gallery goes out, and if there are
+//  edited photos they go out too. Both live on the card so you never have
+//  to go looking for a separate screen to finish a client off.
+//    driveLink  — the Google Drive folder of the full gallery
+//    editedLink — the edited photos to hand over
+function cjLinks(t){
+  return '<div class="cj-links">'+
+    cjLinkRow(t, 'drive',  '📂', 'Gallery folder', 'Paste the Google Drive folder link…') +
+    cjLinkRow(t, 'edited', '✨', 'Edited photos',  'Paste the link to the edited photos…') +
+  '</div>';
+}
+
+function cjLinkRow(t, which, icon, label, placeholder){
+  var val  = which === 'drive' ? (t.driveLink||'')  : (t.editedLink||'');
+  var sent = which === 'drive' ? (t.driveLinkSentDate||'') : (t.editedSentDate||'');
+  var id   = 'cjl-'+which+'-'+t.id;
+  return '<div class="cj-link">'+
+    '<span class="cj-link-l" title="'+escHtml(label)+'">'+icon+'</span>'+
+    '<input type="url" id="'+id+'" value="'+escHtml(val)+'" placeholder="'+escHtml(placeholder)+'" '+
+      'onchange="cjSaveLink(\''+t.id+'\',\''+which+'\',this.value)">'+
+    (val ? '<a href="'+escHtml(val)+'" target="_blank" rel="noopener" class="cj-link-b" title="Open it">↗</a>' : '')+
+    (sent
+      ? '<span class="cj-sent" title="Sent '+escHtml(sent)+'">✓ sent '+escHtml(sent)+'</span>'
+      : '<button class="cj-link-b send" onclick="cjSendLink(\''+t.id+'\',\''+which+'\')" '+
+          'title="Email this link to the client">✉ Send</button>'+
+        '<button class="cj-link-b" onclick="cjMarkGiven(\''+t.id+'\',\''+which+'\')" '+
+          'title="Handed over in person — AirDrop, USB, printed">✓</button>')+
+  '</div>';
+}
+
 
 // Delete a job off the board. Names the client in the prompt so nobody
 // deletes the wrong card, and warns when there's still work outstanding.
@@ -3734,6 +3461,139 @@ function cjDelete(id){
   if(!confirm(msg)) return;
   deleteTask(id);           // handles the sheet, the sync and the deleted-id list
   renderClientJobs();
+}
+
+// ── Adding and removing things to do ────────────────────────────
+//  A job's list isn't fixed. Anything the package doesn't cover — the prep
+//  for a particular shoot, a note from the client, a reprint asked for on
+//  the day — gets added straight onto the job it belongs to. Items are
+//  written into the notes as tick boxes, exactly like the ones the package
+//  puts there, so they sync and survive like the rest.
+function cjAddItem(taskId){
+  var t = (TASKS||[]).find(function(x){ return x.id === taskId; });
+  if(!t) return;
+  var what = (prompt('What needs doing for ' + (t.client || 'this client') + '?') || '').trim();
+  if(!what) return;
+  // Strip a leading dash, bullet or tick box so a pasted line lands clean
+  what = what.replace(/^[-*•\s]+/, '').replace(/^\[[ xX]\]\s*/, '').trim();
+  if(!what) return;
+
+  var lines = String(t.notes||'').split('\n');
+  // Put it after the last existing box so it joins the list, rather than
+  // landing under the client's own notes at the bottom.
+  var last = -1;
+  lines.forEach(function(l, i){ if(/^\s*\[[ xX]\]/.test(l)) last = i; });
+  if(last === -1) lines.push('[ ] ' + what);
+  else lines.splice(last + 1, 0, '[ ] ' + what);
+
+  t.notes = lines.join('\n');
+  t.updatedAt = nowTs();
+  pushTask(t, false);
+  renderClientJobs();
+  notify('Added to ' + (t.client || 'the job'), 'success');
+}
+
+function cjDelItem(taskId, idx){
+  var t = (TASKS||[]).find(function(x){ return x.id === taskId; });
+  if(!t) return;
+  var p = llParse(t.notes);
+  var it = p.items[idx];
+  if(!it) return;
+  if(!confirm('Take "' + it.text + '" off this job?\n\nIf the package owes it, this is the only record of it.')) return;
+  var lines = String(t.notes||'').split('\n');
+  lines.splice(it.line, 1);
+  t.notes = lines.join('\n');
+  t.updatedAt = nowTs();
+  pushTask(t, false);
+  renderClientJobs();
+}
+
+// ── The two photo links ─────────────────────────────────────────
+function cjLinkField(which){ return which === 'drive' ? 'driveLink' : 'editedLink'; }
+function cjSentField(which){ return which === 'drive' ? 'driveLinkSentDate' : 'editedSentDate'; }
+function cjLinkName(which){ return which === 'drive' ? 'the gallery folder' : 'the edited photos'; }
+
+function cjSaveLink(taskId, which, value){
+  var t = (TASKS||[]).find(function(x){ return x.id === taskId; });
+  if(!t) return;
+  var v = String(value||'').trim();
+  if(v && !/^https?:\/\//i.test(v)){
+    notify('That does not look like a link — it should start with https://', 'error');
+    return;
+  }
+  t[cjLinkField(which)] = v;
+  t.updatedAt = nowTs();
+  pushTask(t, false);
+  renderClientJobs();
+}
+
+// Email the link to the client, the same way the old Send Link screen did.
+async function cjSendLink(taskId, which){
+  var t = (TASKS||[]).find(function(x){ return x.id === taskId; });
+  if(!t) return;
+  var input = document.getElementById('cjl-' + which + '-' + taskId);
+  var link = ((input && input.value) || t[cjLinkField(which)] || '').trim();
+  if(!link || !/^https?:\/\//i.test(link)){
+    notify('Paste ' + cjLinkName(which) + ' link first', 'error');
+    if(input) input.focus();
+    return;
+  }
+  var email = t.clientEmail || '';
+  if(!email){
+    var cl = (CLIENTS||[]).find(function(c){ return c.fbName === t.client; });
+    email = (cl && cl.email) || '';
+  }
+  if(!email){ notify('No email on file for ' + (t.client||'this client'), 'error'); return; }
+  if(!confirm('Email ' + cjLinkName(which) + ' to ' + t.client + ' at ' + email + '?')) return;
+
+  t[cjLinkField(which)] = link;
+  t.clientEmail = email;
+  saveTasks();
+
+  try{
+    var r = await gasCall('sendLinkEmail', {
+      email: email, clientName: t.client, driveLink: link,
+      taskTitle: which === 'drive' ? 'Your gallery' : 'Your edited photos',
+      taskId: t.id, sentBy: 'Client Jobs'
+    });
+    if(r && r.ok){
+      cjMarkSent(t, which, 'emailed to ' + email);
+    } else {
+      notify('Send failed: ' + ((r && r.error) || 'unknown'), 'error');
+    }
+  }catch(e){ notify('Error: ' + e.message, 'error'); }
+}
+
+// Handed over in person — AirDrop, a USB stick, prints across the counter.
+function cjMarkGiven(taskId, which){
+  var t = (TASKS||[]).find(function(x){ return x.id === taskId; });
+  if(!t) return;
+  if(!confirm('Mark ' + cjLinkName(which) + ' as handed over to ' + (t.client||'this client') + ' in person?')) return;
+  cjMarkSent(t, which, 'handed over in person');
+}
+
+// Record that one of the two went out, and tick whichever box on the
+// checklist it satisfies, so the job's progress reflects what happened.
+function cjMarkSent(t, which, how){
+  t[cjSentField(which)] = todayStr();
+  var box = which === 'drive' ? /upload the gallery|gallery|drive|download link/i
+                              : /send the client|edited photo|soft cop|digital cop/i;
+  var p = llParse(t.notes);
+  var lines = String(t.notes||'').split('\n');
+  var ticked = 0;
+  p.items.forEach(function(it){
+    if(!it.done && box.test(it.text)){
+      lines[it.line] = lines[it.line].replace(/^(\s*)\[ \]/, '$1[x]');
+      ticked++;
+    }
+  });
+  if(ticked) t.notes = lines.join('\n');
+  t.updatedAt = nowTs();
+  pushTask(t, false);
+  renderClientJobs();
+  var label = cjLinkName(which).replace(/^the /, '');
+  notify('✓ ' + label.charAt(0).toUpperCase() + label.slice(1) + ' ' + how +
+         (ticked ? ' — ' + ticked + ' box' + (ticked===1?'':'es') + ' ticked' : ''), 'success');
 }
 
 // Tick a box straight on the card
@@ -3773,13 +3633,14 @@ function saveTask(existingId){
   var priority = document.getElementById('td-priority').value||'normal';
   var assigned = (document.getElementById('td-assigned').value||'').trim();
   var driveLink= (document.getElementById('td-drive').value||'').trim();
+  var editedLink=(document.getElementById('td-edited')?.value||'').trim();
   var notes    = (document.getElementById('td-notes').value||'').trim();
   var photosForEditing = (document.getElementById('td-photos')?.value||'').trim();
 
   // Title is now optional — Type serves as the standard title
   // If no title given, fall back to type label
   if(!title){
-    var tp = TASK_TYPES[type]||TASK_TYPES.other;
+    var tp = taskType(type);
     title = tp.label + (client ? ' — '+client : '');
   }
 
@@ -3792,7 +3653,8 @@ function saveTask(existingId){
       var nowDelivered = (stage === 'delivered');
       t.title = title; t.client = client; t.type = type; t.stage = stage;
       t.dueDate = dueDate; t.due = dueDate; t.priority = priority; t.assignedTo = assigned;
-      t.driveLink = driveLink; t.notes = notes; t.photosForEditing = photosForEditing; t.updatedAt = now;
+      t.driveLink = driveLink; t.editedLink = editedLink;
+      t.notes = notes; t.photosForEditing = photosForEditing; t.updatedAt = now;
       // Track completion timestamp
       if(nowDelivered && !wasDelivered) t.completedAt = now;
       else if(!nowDelivered && wasDelivered) t.completedAt = '';
@@ -3805,7 +3667,8 @@ function saveTask(existingId){
     var task = {
       id: uid(), title: title, client: client, type: type, stage: stage,
       dueDate: dueDate, priority: priority, assignedTo: assigned,
-      driveLink: driveLink, notes: notes, photosForEditing: photosForEditing,
+      driveLink: driveLink, editedLink: editedLink,
+      notes: notes, photosForEditing: photosForEditing,
       createdAt: now, updatedAt: now,
       completedAt: (stage === 'delivered' ? now : ''),
       archived: false, due: dueDate
@@ -3936,11 +3799,6 @@ function updateClientCount(){
   if(el) el.textContent = CLIENTS.length+' clients synced';
 }
 
-function refreshSendLinkIfActive(){
-  var sec = document.getElementById('section-sendlink');
-  if(sec && sec.style.display !== 'none') renderSendLinkTab();
-}
-
 function updateLastSync(){
   var el = document.getElementById('last-sync');
   if(el){
@@ -3970,10 +3828,6 @@ if(!hasUrl()){
 
 render();
 loadTimeCommandStaff();
-// Defined further down in the second <script> block, so it isn't visible yet
-// when this line runs on load — same guard as slUpdateBadge. It's also called
-// again from DOMContentLoaded below, so nothing is skipped.
-if(typeof cleanupOldShootPreps === 'function') cleanupOldShootPreps();
 
 // Sync on load
 if(hasUrl()) {
@@ -4012,8 +3866,6 @@ async function silentSync(){
           changed = true;
         }
       }
-      if(Array.isArray(r.registrations)) slSetRegistrations(r.registrations);
-      if(Array.isArray(r.acknowledgements)) slSetBookings(r.acknowledgements);
       if(Array.isArray(r.clients) || Array.isArray(r.registrations) || Array.isArray(r.transactions) || Array.isArray(r.acknowledgements)){
         var clientMap = {};
         if(Array.isArray(r.clients)) r.clients.forEach(function(c){ var k=(c.fbName||'').trim().toLowerCase(); if(k) clientMap[k]=c; });
@@ -4025,7 +3877,6 @@ async function silentSync(){
         updateClientCount();
       }
       if(changed) render();
-      refreshSendLinkIfActive();
       updateLastSync();
     }
   }catch(e){}
@@ -4042,398 +3893,3 @@ document.addEventListener('visibilitychange', function(){
 </script>
 </body>
 </html>
-<script>
-// ════════════════════════════════════════════════════════════
-//  📤 SEND LINK TAB — auto-populated from registrations
-// ════════════════════════════════════════════════════════════
-var SL2_REG = [];
-var SL2_BOOKINGS = [];
-function slSetRegistrations(regs){ if(Array.isArray(regs)) SL2_REG = regs; slUpdateBadge(); }
-function slSetBookings(acks){ if(Array.isArray(acks)) SL2_BOOKINGS = acks; }
-function slUpdateBadge(){
-  var b = document.getElementById('sb-sendlink-badge');
-  if(!b) return;
-  var today = todayStr();
-  var sentClients = new Set((TASKS||[]).filter(function(t){
-    return t.type==='sendlink' && (t.stage==='delivered'||t.driveLinkSentDate);
-  }).map(function(t){ return String(t.client||'').toLowerCase(); }));
-  var pending = SL2_REG.filter(function(r){
-    return String(r.date||'').slice(0,10)===today && !sentClients.has(String(r.fbName||'').toLowerCase());
-  }).length;
-  if(pending>0){ b.textContent=pending; b.style.display=''; } else b.style.display='none';
-}
-function renderSendLinkTab(){
-  var box = document.getElementById('sl2-list');
-  if(!box) return;
-  var when = (document.getElementById('sl2-when')||{}).value || 'today';
-  var today = todayStr();
-  if(when==='upcoming'){ renderUpcomingBookings(box, today); return; }
-  var slByClient = {};
-  (TASKS||[]).filter(function(t){ return t.type==='sendlink' && !t.archived; }).forEach(function(t){
-    slByClient[String(t.client||'').toLowerCase()] = t;
-  });
-  var clientEmailByName = {};
-  (CLIENTS||[]).forEach(function(c){
-    var k = String(c.fbName||'').trim().toLowerCase();
-    if(k && c.email) clientEmailByName[k] = c.email;
-  });
-  var rows = SL2_REG.map(function(r){
-    var name = String(r.fbName||'').trim();
-    var existing = slByClient[name.toLowerCase()];
-    var email = r.email || (existing&&existing.clientEmail) || clientEmailByName[name.toLowerCase()] || '';
-    return { name:name, email:email, date:String(r.date||'').slice(0,10),
-      task:existing||null, sent:!!(existing&&(existing.stage==='delivered'||existing.driveLinkSentDate)),
-      driveLink:existing?existing.driveLink||'':'', deliveryMethod:existing?existing.deliveryMethod||'':'' };
-  });
-  (TASKS||[]).filter(function(t){ return t.type==='sendlink' && !t.archived; }).forEach(function(t){
-    var nm = String(t.client||'').toLowerCase();
-    if(!rows.some(function(x){ return x.name.toLowerCase()===nm; })){
-      rows.push({ name:t.client||'', email:t.clientEmail||clientEmailByName[nm]||'', date:String(t.dueDate||t.createdAt||'').slice(0,10),
-        task:t, sent:(t.stage==='delivered'||t.driveLinkSentDate), driveLink:t.driveLink||'', deliveryMethod:t.deliveryMethod||'' });
-    }
-  });
-  var weekAgo = new Date(Date.now()-7*86400000).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
-  rows = rows.filter(function(x){
-    if(when==='today')   return x.date===today && !x.sent;
-    if(when==='week')    return x.date>=weekAgo && !x.sent;
-    if(when==='pending') return !x.sent;
-    if(when==='sent')    return x.sent;
-    return true;
-  });
-  var seen={}; rows = rows.filter(function(x){ var k=x.name.toLowerCase(); if(!k||seen[k])return false; seen[k]=true; return true; });
-  rows.sort(function(a,b){ if(a.sent!==b.sent) return a.sent?1:-1; return String(b.date).localeCompare(String(a.date)); });
-  if(!rows.length){
-    box.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted);">'+
-      '<div style="font-size:36px;margin-bottom:8px;">📭</div>'+
-      '<div style="font-size:13px;">'+(when==='today'?'No client deliveries for today yet.':'Nothing here.')+'</div>'+
-      '<div style="font-size:11px;margin-top:4px;">Clients appear here automatically when they register at the studio.</div></div>';
-    return;
-  }
-  box.innerHTML = rows.map(function(x, i){
-    var slug='sl2-'+i;
-    if(x.sent){
-      var viaAirdrop = x.deliveryMethod==='airdrop';
-      return '<div style="background:rgba(61,140,110,.06);border:1px solid rgba(61,140,110,.25);border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">'+
-        '<div><div style="font-weight:700;font-size:13px;">✓ '+escHtml(x.name)+(viaAirdrop?' <span style="font-size:11px;font-weight:600;color:var(--teal);">📱 via AirDrop</span>':'')+'</div>'+
-        '<div style="font-size:11px;color:var(--muted);">'+(viaAirdrop?'Sent via AirDrop':escHtml(x.email||'no email')+' · sent')+'</div></div>'+
-        (x.driveLink?'<a href="'+escHtml(x.driveLink)+'" target="_blank" style="font-size:11px;color:var(--teal);">📂 View link</a>':'')+'</div>';
-    }
-    var hasEmail=!!x.email;
-    return '<div style="background:var(--white);border:1px solid var(--border);border-left:4px solid var(--gold);border-radius:12px;padding:14px;margin-bottom:10px;">'+
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">'+
-        '<div style="font-weight:800;font-size:14px;">'+escHtml(x.name)+'</div>'+
-        '<div style="font-size:11px;color:'+(hasEmail?'var(--muted)':'var(--danger)')+';">'+(hasEmail?'📧 '+escHtml(x.email):'⚠ no email on file')+'</div></div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-        '<input type="url" id="'+slug+'-link" placeholder="Paste Google Drive link…" value="'+escHtml(x.driveLink)+'" style="flex:1;min-width:180px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;">'+
-        '<button class="btn btn-gold" onclick="sl2Send(\''+encodeURIComponent(x.name)+'\',\''+encodeURIComponent(x.email)+'\',\''+slug+'\')" '+(hasEmail?'':'disabled')+'>📤 Send</button>'+
-        '<button class="btn btn-outline" onclick="sl2MarkAirdrop(\''+encodeURIComponent(x.name)+'\',\''+encodeURIComponent(x.email)+'\',\''+slug+'\')" title="Mark as delivered in person via AirDrop">📱 Sent via AirDrop</button>'+
-      '</div></div>';
-  }).join('');
-}
-function renderUpcomingBookings(box, today){
-  var clientEmailByName = {};
-  (CLIENTS||[]).forEach(function(c){
-    var k = String(c.fbName||'').trim().toLowerCase();
-    if(k && c.email) clientEmailByName[k] = c.email;
-  });
-  var seen = {};
-  var rows = (SL2_BOOKINGS||[]).filter(function(a){
-    var d = String(a.bookDate||'').slice(0,10);
-    var st = String(a.status||'').toLowerCase();
-    return d >= today && st !== 'cancelled';
-  }).filter(function(a){
-    var k = String(a.fbName||'').trim().toLowerCase()+'|'+String(a.bookDate||'').slice(0,10);
-    if(!k || seen[k]) return false;
-    seen[k] = true;
-    return true;
-  }).sort(function(a,b){
-    return String(a.bookDate||'').localeCompare(String(b.bookDate||''));
-  });
-  if(!rows.length){
-    box.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted);">'+
-      '<div style="font-size:36px;margin-bottom:8px;">📆</div>'+
-      '<div style="font-size:13px;">No upcoming bookings.</div></div>';
-    return;
-  }
-  box.innerHTML = rows.map(function(a){
-    var name = String(a.fbName||'').trim();
-    var email = a.email || clientEmailByName[name.toLowerCase()] || '';
-    var hasEmail = !!email;
-    var d = String(a.bookDate||'').slice(0,10);
-    var dLabel = d===today ? 'Today' : d;
-    return '<div style="background:var(--white);border:1px solid var(--border);border-left:4px solid var(--teal);border-radius:12px;padding:14px;margin-bottom:10px;">'+
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'+
-        '<div><div style="font-weight:800;font-size:14px;">'+escHtml(name)+'</div>'+
-        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+escHtml(a.service||'')+' · 📅 '+escHtml(dLabel)+(a.timeSlot?' · '+escHtml(a.timeSlot):'')+'</div></div>'+
-        '<div style="font-size:11px;color:'+(hasEmail?'var(--muted)':'var(--danger)')+';">'+(hasEmail?'📧 '+escHtml(email):'⚠ no email on file')+'</div>'+
-      '</div></div>';
-  }).join('');
-}
-async function sl2Send(nameEnc, emailEnc, slug){
-  var name=decodeURIComponent(nameEnc), email=decodeURIComponent(emailEnc);
-  var link=((document.getElementById(slug+'-link')||{}).value||'').trim();
-  if(!email){ notify('No email on file for '+name,'error'); return; }
-  if(!link || !/^https?:\/\//.test(link)){ notify('Paste a valid Google Drive link first','error'); return; }
-  var btn=event.target; if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
-  var t=(TASKS||[]).find(function(x){ return x.type==='sendlink' && String(x.client||'').toLowerCase()===name.toLowerCase(); });
-  var wasNew = !t;
-  if(!t){
-    var now=nowTs();
-    t={ id:uid(), type:'sendlink', title:'Send photos — '+name, client:name, clientEmail:email,
-      due:todayStr(), dueDate:todayStr(), notes:'', driveLink:link, stage:'new', done:'', completed:'',
-      completedAt:'', archived:'', priority:'high', assignedTo:'', createdAt:now, updatedAt:now };
-    TASKS.push(t);
-  } else { t.driveLink=link; t.clientEmail=email; }
-  saveTasks();
-  try{
-    var result=await gasCall('sendLinkEmail',{ email:email, clientName:name, driveLink:link, taskTitle:'Your photos', taskId:t.id, sentBy:'Send Link Tab' });
-    if(result && result.ok){
-      t.driveLinkSentDate=todayStr(); t.stage='delivered'; t.completedAt=nowTs();
-      pushTask(t,wasNew);
-      notify('📤 Photos sent to '+email,'success');
-      renderSendLinkTab(); slUpdateBadge();
-    } else { notify('Send failed: '+((result&&result.error)||'unknown'),'error'); if(btn){ btn.disabled=false; btn.textContent='📤 Send'; } }
-  }catch(e){ notify('Error: '+e.message,'error'); if(btn){ btn.disabled=false; btn.textContent='📤 Send'; } }
-}
-async function sl2MarkAirdrop(nameEnc, emailEnc, slug){
-  var name=decodeURIComponent(nameEnc), email=decodeURIComponent(emailEnc);
-  if(!confirm('Mark photos as delivered to '+name+' via AirDrop?')) return;
-  var btn=event.target; if(btn){ btn.disabled=true; btn.textContent='Marking…'; }
-  var t=(TASKS||[]).find(function(x){ return x.type==='sendlink' && String(x.client||'').toLowerCase()===name.toLowerCase(); });
-  var wasNew = !t;
-  if(!t){
-    var now=nowTs();
-    t={ id:uid(), type:'sendlink', title:'Send photos — '+name, client:name, clientEmail:email,
-      due:todayStr(), dueDate:todayStr(), notes:'', driveLink:'', stage:'new', done:'', completed:'',
-      completedAt:'', archived:'', priority:'high', assignedTo:'', createdAt:now, updatedAt:now };
-    TASKS.push(t);
-  }
-  t.deliveryMethod='airdrop'; t.driveLinkSentDate=todayStr(); t.stage='delivered'; t.completedAt=nowTs();
-  saveTasks();
-  pushTask(t,wasNew);
-  notify('📱 Marked as sent via AirDrop — '+name,'success');
-  renderSendLinkTab(); slUpdateBadge();
-}
-
-// ════════════════════════════════════════════════════════════
-//  💄 HMU PREP TAB — calendar view + structured notes + badge
-// ════════════════════════════════════════════════════════════
-var HMU_Y = new Date().getFullYear(), HMU_M = new Date().getMonth();
-
-function hmuTasks(){
-  return (TASKS||[]).filter(function(t){
-    return String(t.type||'')==='HMU Prep' && !t.archived;
-  });
-}
-// ── Auto-cleanup: permanently delete Shoot Prep tasks 7+ days past their session date ──
-function cleanupOldShootPreps(){
-  var today = todayStr();
-  var cut = new Date();
-  cut.setDate(cut.getDate() - 7);
-  var cutoff = cut.toLocaleDateString('en-CA', {timeZone:'Asia/Manila'});
-
-  var toDelete = (TASKS||[]).filter(function(t){
-    if(String(t.type||'') !== 'HMU Prep') return false;
-    var d = String(t.due || t.dueDate || '').slice(0,10);
-    if(!d) return false;
-    if(d > today) return false;
-    return d < cutoff;
-  });
-
-  if(!toDelete.length) return;
-
-  var deleted = JSON.parse(localStorage.getItem('cl_tasks_deleted')||'[]');
-  toDelete.forEach(function(t){
-    if(deleted.indexOf(t.id) === -1) deleted.push(t.id);
-    if(hasUrl()) gasCall('deleteRow', {sheet:'Tasks', id:t.id}).catch(function(){});
-  });
-  if(deleted.length > 200) deleted = deleted.slice(-200);
-  localStorage.setItem('cl_tasks_deleted', JSON.stringify(deleted));
-
-  var ids = {};
-  toDelete.forEach(function(t){ ids[t.id] = true; });
-  TASKS = TASKS.filter(function(t){ return !ids[t.id]; });
-  saveTasks();
-
-  console.log('🧹 Cleaned up ' + toDelete.length + ' old shoot prep task(s)');
-}
-  
-// ── Notification badge: count HMU tasks not yet seen on this device ──
-function hmuSeenSet(){
-  try{ return new Set(JSON.parse(localStorage.getItem('cl_hmu_seen')||'[]')); }catch(e){ return new Set(); }
-}
-function hmuUpdateBadge(){
-  var seen = hmuSeenSet();
-  var unseen = hmuTasks().filter(function(t){ return !seen.has(String(t.id)); }).length;
-  var b = document.getElementById('sb-hmu-badge');
-  if(!b) return;
-  if(unseen > 0){ b.textContent = unseen; b.style.display=''; }
-  else b.style.display='none';
-}
-function hmuMarkSeen(){
-  var ids = hmuTasks().map(function(t){ return String(t.id); });
-  localStorage.setItem('cl_hmu_seen', JSON.stringify(ids));
-  hmuUpdateBadge();
-}
-
-// ── Structured notes: parse the 4 sections out of the notes blob ──
-var HMU_SECTIONS = [
-  { key:'hmua',  icon:'💄', label:'HMUA Assigned',            marker:'HMUA ASSIGNED:' },
-  { key:'peg',   icon:'📌', label:'Client Peg / Reference',   marker:'CLIENT PEG / REFERENCE:' },
-  { key:'buy',   icon:'🛒', label:'To Buy for the Shoot',     marker:'TO BUY FOR THE SHOOT:' },
-  { key:'other', icon:'📝', label:'Other Notes',              marker:'OTHER NOTES:' }
-];
-function hmuParseNotes(notes){
-  var out = { hmua:'', peg:'', buy:'', other:'', footer:'' };
-  var s = String(notes||'');
-  // Include retired markers (e.g. the removed "File Names for Editing") as
-  // section boundaries so old tasks don't bleed removed content into the peg.
-  // Boundaries search for icon+marker (not just marker text) so a section's
-  // body doesn't swallow the NEXT section's leading icon — markers are always
-  // written as "<icon> <MARKER TEXT>" by hmuBuildNotes.
-  var ALL_MARKERS = HMU_SECTIONS.map(function(sec){ return sec.icon + ' ' + sec.marker; })
-    .concat(['FILE NAMES FOR EDITING:']);
-  var boundaries = ALL_MARKERS.map(function(m){ return { m:m, i:s.indexOf(m) }; }).filter(function(x){ return x.i > -1; });
-  var foot = s.indexOf('— Package:');
-  if(foot > -1) out.footer = s.slice(foot).trim();
-  HMU_SECTIONS.forEach(function(sec){
-    var ci = s.indexOf(sec.marker);
-    if(ci === -1) return;
-    var start = ci + sec.marker.length;
-    var end = s.length;
-    // section ends at the NEXT marker of any kind (current or retired), or footer
-    boundaries.forEach(function(b){ if(b.i > ci && b.i < end) end = b.i; });
-    if(foot > ci && foot < end) end = foot;
-    var body = s.slice(start, end).trim();
-    body = body.split('\n').filter(function(l){
-      var t = l.trim();
-      return t && !(t.startsWith('(') && t.endsWith(')'));
-    }).join('\n').replace(/^[💄🗂🛒📝📌]\s*/u,'').trim();
-    out[sec.key] = body;
-  });
-  if(boundaries.length === 0 && s.trim() && s.indexOf('— Package:') !== 0) out.other = s.replace(/— Package:.*$/s,'').trim();
-  return out;
-}
-function hmuBuildNotes(vals, footer){
-  return '💄 HMUA ASSIGNED:\n' + (vals.hmua||'') + '\n\n' +
-         '📌 CLIENT PEG / REFERENCE:\n' + (vals.peg||'') + '\n\n' +
-         '🛒 TO BUY FOR THE SHOOT:\n' + (vals.buy||'') + '\n\n' +
-         '📝 OTHER NOTES:\n' + (vals.other||'') + '\n\n' +
-         (footer||'');
-}
-function hmuPrepStatus(t){
-  var p = hmuParseNotes(t.notes);
-  var filled = ['hmua','peg','buy','other'].filter(function(k){ return p[k]; }).length;
-  if(String(t.stage)==='delivered' || t.completed || filled >= 3) return 'done';
-  if(filled >= 1 || String(t.stage)==='inprogress') return 'progress';
-  return 'new';
-}
-
-// ── Calendar rendering ──
-function hmuMonthShift(d){ HMU_M += d; if(HMU_M<0){HMU_M=11;HMU_Y--;} if(HMU_M>11){HMU_M=0;HMU_Y++;} renderHmuCalendar(); }
-function hmuGoToday(){ var n=new Date(); HMU_Y=n.getFullYear(); HMU_M=n.getMonth(); renderHmuCalendar(); }
-
-function renderHmuCalendar(){
-  var head = document.getElementById('hmu-cal-head');
-  var grid = document.getElementById('hmu-cal-grid');
-  var lbl  = document.getElementById('hmu-cal-label');
-  if(!head || !grid) return;
-
-  lbl.textContent = new Date(HMU_Y, HMU_M, 1).toLocaleDateString('en-PH',{month:'long',year:'numeric'});
-  head.innerHTML = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(function(d){
-    return '<div style="padding:7px 4px;text-align:center;font-size:10px;font-weight:800;letter-spacing:1px;color:var(--cream);">'+d+'</div>';
-  }).join('');
-
-  var first = new Date(HMU_Y, HMU_M, 1).getDay();
-  var days  = new Date(HMU_Y, HMU_M+1, 0).getDate();
-  var todayStr = new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
-  var tasks = hmuTasks();
-
-  var html = '';
-  for(var b=0;b<first;b++) html += '<div style="background:var(--light);border:1px solid var(--border);"></div>';
-  for(var d=1; d<=days; d++){
-    var ds = HMU_Y+'-'+String(HMU_M+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-    var dayTasks = tasks.filter(function(t){ return String(t.due||t.dueDate||'').slice(0,10)===ds; })
-      .sort(function(a,b){
-        var tm = function(t){ var m=String(t.title||'').match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i); if(!m) return 9999; var h=parseInt(m[1]); if(/PM/i.test(m[3])&&h<12)h+=12; if(/AM/i.test(m[3])&&h===12)h=0; return h*60+parseInt(m[2]); };
-        return tm(a)-tm(b);
-      });
-    var isToday = ds===todayStr;
-    var chips = dayTasks.map(function(t){
-      var st = hmuPrepStatus(t);
-      var col = st==='done' ? ['#d4edda','#3d8c6e'] : st==='progress' ? ['#d6e9f8','#3a7ca5'] : ['#fff3cd','#d79068'];
-      var nm = String(t.client||'').trim() || String(t.title||'').replace(/^[💄📸]\s*/,'').replace(/\s*—.*$/,'').replace(/\s*\(.*?\)\s*$/,'');
-      var timeM = String(t.title||'').match(/\((\d{1,2}:\d{2}\s*[AP]M)\)/i);
-      return '<div onclick="openHmuDetail(\''+t.id+'\')" style="font-size:9px;background:'+col[0]+';border:1px solid '+col[1]+';border-left:3px solid '+col[1]+';border-radius:3px;padding:2px 4px;margin-top:2px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+
-        (timeM?'<strong>'+timeM[1]+'</strong> ':'')+escHtml(nm)+'</div>';
-    }).join('');
-    html += '<div style="min-height:88px;background:'+(isToday?'rgba(215,144,104,.07)':'var(--white)')+';border:1px solid var(--border);padding:4px;">'+
-      '<div style="font-size:11px;font-weight:'+(isToday?'800':'500')+';color:'+(isToday?'var(--gold)':'var(--muted)')+';">'+d+'</div>'+chips+'</div>';
-  }
-  grid.innerHTML = html;
-}
-
-// ── Detail modal with 4 separate boxes ──
-function openHmuDetail(id){
-  var t = (TASKS||[]).find(function(x){ return String(x.id)===String(id); });
-  if(!t){ notify('Task not found','error'); return; }
-  var p = hmuParseNotes(t.notes);
-  var dueStr = String(t.due||t.dueDate||'').slice(0,10);
-  var placeholders = {
-    hmua:  'Name of the assigned hair & makeup artist…',
-    peg:   'Paste peg links or describe the look…',
-    buy:   'Props, makeup items, materials…',
-    other: 'Allergies, outfit details, reminders…'
-  };
-  var boxes = HMU_SECTIONS.map(function(sec){
-    return '<div style="margin-bottom:12px;">'+
-      '<label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);margin-bottom:4px;">'+sec.icon+' '+sec.label+'</label>'+
-      '<textarea id="hmu-'+sec.key+'" style="width:100%;min-height:'+(sec.key==='hmua'?'40px':'64px')+';padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="'+placeholders[sec.key]+'">'+escHtml(p[sec.key]||'')+'</textarea>'+
-    '</div>';
-  }).join('');
-  openModal(
-    '<h3 style="margin:0 0 2px;">📸 '+escHtml(t.client||'Photographer Session')+'</h3>'+
-    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">'+escHtml(p.footer||('Due '+dueStr))+'</div>'+
-    boxes+
-    '<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:4px;flex-wrap:wrap;">'+
-      '<label style="font-size:11px;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="hmu-done" '+(t.completed||t.stage==='delivered'?'checked':'')+' style="accent-color:var(--teal);width:16px;height:16px;"> Prep complete</label>'+
-      '<div style="display:flex;gap:8px;">'+
-        '<button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
-        '<button class="btn btn-teal" onclick="saveHmuDetail(\''+t.id+'\')">💾 Save</button>'+
-      '</div>'+
-    '</div>'
-  );
-}
-
-function saveHmuDetail(id){
-  var t = (TASKS||[]).find(function(x){ return String(x.id)===String(id); });
-  if(!t) return;
-  var p = hmuParseNotes(t.notes);
-  var vals = {
-    hmua:  document.getElementById('hmu-hmua').value.trim(),
-    peg:   document.getElementById('hmu-peg').value.trim(),
-    buy:   document.getElementById('hmu-buy').value.trim(),
-    other: document.getElementById('hmu-other').value.trim()
-  };
-  t.notes = hmuBuildNotes(vals, p.footer);
-  var done = document.getElementById('hmu-done').checked;
-  if(done){ t.stage='delivered'; t.completed = t.completed || new Date().toISOString().slice(0,10); }
-  else if(vals.hmua||vals.peg||vals.buy||vals.other){ if(t.stage==='new') t.stage='inprogress'; t.completed=''; }
-  t.updated = new Date().toISOString().slice(0,10);
-  t.updatedAt = t.updated;
-  saveTasks();
-  if(typeof queueSync==='function') queueSync('saveTask', t);
-  else if(typeof gasCall==='function') gasCall('saveTask', t).catch(function(){});
-  closeModal();
-  renderHmuCalendar();
-  hmuUpdateBadge();
-  notify('💾 Session prep saved for '+(t.client||''),'success');
-}
-
-// Badge refresh after every data load + on start
-(function(){
-  var _origLoad = window.addEventListener;
-  document.addEventListener('DOMContentLoaded', function(){ setTimeout(hmuUpdateBadge, 800); setTimeout(cleanupOldShootPreps, 1500); });
-  setInterval(hmuUpdateBadge, 30000);
-})();
-</script>
