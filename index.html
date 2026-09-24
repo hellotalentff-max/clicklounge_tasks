@@ -132,6 +132,8 @@ select.sinput{appearance:auto;}
 .cj-link-b:hover{border-color:var(--teal);color:var(--teal);}
 .cj-link-b.send{border-color:rgba(81,137,125,.45);color:var(--teal);}
 .cj-sent{flex-shrink:0;font-size:10.5px;font-weight:700;color:var(--success);background:rgba(61,140,110,.1);border-radius:12px;padding:4px 9px;}
+.cj-fold{border:none;background:transparent;font:inherit;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);cursor:pointer;padding:0;}
+.cj-fold:hover{color:var(--teal);}
 .cj-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:9px;border-top:1px solid var(--border);}
 .cj-empty{text-align:center;padding:48px 20px;color:var(--muted);font-size:13px;}
 .cj-del{background:none;border:1.5px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 9px;font-size:13px;line-height:1;cursor:pointer;transition:all .15s;}
@@ -3257,7 +3259,7 @@ function cjAddSave(){
 //  to open anything — and a job only leaves the list once every box
 //  is ticked and it's been handed over.
 // ================================================================
-var CJ_SEARCH = '', CJ_SHOW_DONE = false;
+var CJ_SEARCH = '', CJ_SHOW_DONE = false, CJ_SHOW_OTHER = false;
 
 function cjSetSearch(q){ CJ_SEARCH = String(q||'').trim().toLowerCase(); renderClientJobs(); }
 function cjToggleDone(){
@@ -3277,18 +3279,35 @@ function cjIsClientWork(t){
   return taskType(t.type).category === 'client';
 }
 
-// A package job carries a checklist; a one-off doesn't.
+// A package job carries a checklist; a one-off doesn't. This is what
+// decides the order of the screen: the packages come first, because they
+// are the work with things owed on them.
 function cjHasChecklist(t){
   return llParse(t.notes).total > 0;
+}
+
+// A leftover from a feature that no longer exists — an old Send Link task,
+// an old Shoot Prep — with nothing on it to do. Keeping these on the list
+// buried the real jobs under them, so they stay off it. They are still
+// found by search, so nothing is lost.
+function cjIsLegacyRecord(t){
+  if(!t) return false;
+  if(cjHasChecklist(t)) return false;
+  return !!TASK_TYPES_RETIRED[String(t.type||'')];
 }
 
 function cjJobs(){
   return (TASKS||[]).filter(function(t){
     if(!cjIsClientWork(t) || t.archived) return false;
-    if(!CJ_SEARCH) return true;
+    if(!CJ_SEARCH) return !cjIsLegacyRecord(t);   // search still reaches them
     var hay = (String(t.client||'')+' '+String(t.title||'')+' '+String(t.notes||'')).toLowerCase();
     return hay.indexOf(CJ_SEARCH) > -1;
   });
+}
+
+function cjToggleOther(){
+  CJ_SHOW_OTHER = !CJ_SHOW_OTHER;
+  renderClientJobs();
 }
 
 // Everything ticked AND marked delivered = handed over, off the list
@@ -3307,36 +3326,52 @@ function renderClientJobs(){
   var live = jobs.filter(function(t){ return !cjIsDone(t); });
   var done = jobs.filter(cjIsDone);
 
-  // Group by how much they need looking at
+  // The screen leads with package jobs, because those are the ones with
+  // things owed on them. One-offs with no checklist sit below in their own
+  // section — there can be a lot of them, and a list of bare names would
+  // otherwise bury the jobs that actually have work on them.
+  var pkgs  = live.filter(cjHasChecklist);
+  var other = live.filter(function(t){ return !cjHasChecklist(t); });
+
+  // Group the package jobs by how much they need looking at
   var late = [], hot = [], rest = [];
-  live.forEach(function(t){
+  pkgs.forEach(function(t){
     var p = llParse(t.notes);
     var overdue = t.dueDate && t.dueDate < today;
     var needsCheck = /CHECK THE PACKAGE/i.test(String(t.notes||''));
     if(overdue || needsCheck) late.push(t);
-    // A package job is "in progress" once a box is ticked. A one-off has no
-    // boxes, so it counts as started when somebody has taken it on or a link
-    // has gone up. Deliberately NOT its stage: autoPromoteTasks() flips that
-    // to "inprogress" on the due date alone, which says nothing about whether
-    // anyone has touched it.
-    else if(p.total ? p.done > 0
-                    : !!(t.assignedTo || t.driveLink || t.editedLink)) hot.push(t);
+    else if(p.done > 0) hot.push(t);
     else rest.push(t);
   });
   var byDue = function(a,b){ return String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999')); };
   late.sort(byDue); hot.sort(byDue); rest.sort(byDue);
+  // One-offs: overdue first, then by date
+  other.sort(function(a,b){
+    var ao = (a.dueDate && a.dueDate < today) ? 0 : 1;
+    var bo = (b.dueDate && b.dueDate < today) ? 0 : 1;
+    return ao - bo || byDue(a,b);
+  });
 
-  // The line under the heading, and the sidebar badge
+  // The line under the heading, and the sidebar badge. Both count the
+  // package jobs — that is the outstanding workload.
   var openItems = 0;
-  live.forEach(function(t){ var p = llParse(t.notes); openItems += (p.total - p.done); });
+  pkgs.forEach(function(t){ var p = llParse(t.notes); openItems += (p.total - p.done); });
   var sum = document.getElementById('cj-summary');
-  if(sum) sum.textContent = live.length
-    ? live.length + ' job' + (live.length===1?'':'s') + ' open · ' + openItems + ' thing' + (openItems===1?'':'s') + ' left to do'
-    : 'nothing outstanding';
+  if(sum){
+    if(pkgs.length){
+      sum.textContent = pkgs.length + ' job' + (pkgs.length===1?'':'s') + ' open · ' +
+        openItems + ' thing' + (openItems===1?'':'s') + ' left to do' +
+        (other.length ? ' · ' + other.length + ' other' : '');
+    } else {
+      sum.textContent = other.length
+        ? other.length + ' other client task' + (other.length===1?'':'s')
+        : 'nothing outstanding';
+    }
+  }
   var badge = document.getElementById('sb-jobs-badge');
   if(badge){
-    badge.textContent = live.length || '';
-    badge.style.display = live.length ? '' : 'none';
+    badge.textContent = pkgs.length || '';
+    badge.style.display = pkgs.length ? '' : 'none';
   }
 
   if(!live.length && !done.length){
@@ -3350,6 +3385,20 @@ function renderClientJobs(){
   if(late.length) html += '<div class="cj-group">⚠ Needs attention <i></i></div>' + late.map(cjCard).join('');
   if(hot.length)  html += '<div class="cj-group">In progress <i></i></div>'      + hot.map(cjCard).join('');
   if(rest.length) html += '<div class="cj-group">Not started <i></i></div>'      + rest.map(cjCard).join('');
+
+  // One-offs, folded away by default so they can't swamp the packages.
+  // A search is never folded: if you looked for it, you want to see it.
+  var showOther = CJ_SHOW_OTHER || !!CJ_SEARCH;
+  if(other.length){
+    var overdueOther = other.filter(function(t){ return t.dueDate && t.dueDate < today; }).length;
+    html += '<div class="cj-group" style="margin-top:22px;">'+
+      '<button class="cj-fold" onclick="cjToggleOther()">'+
+        (showOther ? '▾' : '▸')+' Other client work &middot; '+other.length+
+        (overdueOther ? ' <b style="color:var(--danger);">('+overdueOther+' overdue)</b>' : '')+
+      '</button><i></i></div>';
+    if(showOther) html += other.map(cjCard).join('');
+  }
+
   if(CJ_SHOW_DONE && done.length) html += '<div class="cj-group">Handed over <i></i></div>' + done.map(cjCard).join('');
   else if(done.length) html += '<div class="cj-group" style="margin-top:22px;">'+
     done.length+' handed over <i></i></div>';
