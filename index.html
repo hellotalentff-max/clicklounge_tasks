@@ -3310,6 +3310,41 @@ function cjToggleOther(){
   renderClientJobs();
 }
 
+// ── The shoot date ──────────────────────────────────────────────
+//  There is no field for it: a job's shoot date lives inside its own
+//  title, as "<Package> — 2026-10-04 4:45 PM". The title is the one that
+//  gets corrected when a booking is moved, so it is read first and the
+//  package line in the notes is the fallback. A job with no date anywhere
+//  sorts to the end rather than to 1970.
+function cjShootDate(t){
+  if(!t) return '';
+  var m = String(t.title||'').match(/(\d{4}-\d{2}-\d{2})/);
+  if(m) return m[1];
+  m = String(llParse(t.notes).pkg || '').match(/(\d{4}-\d{2}-\d{2})/);
+  if(m) return m[1];
+  m = String(t.notes||'').match(/(\d{4}-\d{2}-\d{2})/);
+  if(m) return m[1];
+  return cjDateOnly(t.dueDate);        // a one-off has no shoot, only a deadline
+}
+
+// Dates arrive from the sheet both as "2026-10-04" and as a full ISO
+// timestamp. Everything here wants the day, so cut it down to one shape.
+function cjDateOnly(v){
+  var s = String(v || '');
+  var m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : s;
+}
+
+// Sort by shoot date, oldest first: the shoot that happened longest ago and
+// still owes something is the one that has been waiting longest. Jobs with
+// no date at all go last.
+function cjByShootDate(a, b){
+  var da = cjShootDate(a) || '9999-99-99';
+  var db = cjShootDate(b) || '9999-99-99';
+  if(da !== db) return da.localeCompare(db);
+  return String(a.client||'').localeCompare(String(b.client||''));
+}
+
 // Everything ticked AND marked delivered = handed over, off the list
 function cjIsDone(t){
   var p = llParse(t.notes);
@@ -3333,34 +3368,27 @@ function renderClientJobs(){
   var pkgs  = live.filter(cjHasChecklist);
   var other = live.filter(function(t){ return !cjHasChecklist(t); });
 
-  // Group the package jobs by how much they need looking at
-  var late = [], hot = [], rest = [];
-  pkgs.forEach(function(t){
-    var p = llParse(t.notes);
-    var overdue = t.dueDate && t.dueDate < today;
-    var needsCheck = /CHECK THE PACKAGE/i.test(String(t.notes||''));
-    if(overdue || needsCheck) late.push(t);
-    else if(p.done > 0) hot.push(t);
-    else rest.push(t);
-  });
-  var byDue = function(a,b){ return String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999')); };
-  late.sort(byDue); hot.sort(byDue); rest.sort(byDue);
-  // One-offs: overdue first, then by date
-  other.sort(function(a,b){
-    var ao = (a.dueDate && a.dueDate < today) ? 0 : 1;
-    var bo = (b.dueDate && b.dueDate < today) ? 0 : 1;
-    return ao - bo || byDue(a,b);
-  });
+  // One list, in shoot-date order. The urgency still shows — an overdue job
+  // keeps its red border, one with an unknown package keeps its orange one
+  // and its banner — but it no longer jumps the queue. Reading down the
+  // list is reading down the calendar.
+  pkgs.sort(cjByShootDate);
+  other.sort(cjByShootDate);
 
   // The line under the heading, and the sidebar badge. Both count the
   // package jobs — that is the outstanding workload.
-  var openItems = 0;
-  pkgs.forEach(function(t){ var p = llParse(t.notes); openItems += (p.total - p.done); });
+  var openItems = 0, lateCount = 0;
+  pkgs.forEach(function(t){
+    var p = llParse(t.notes);
+    openItems += (p.total - p.done);
+    if(t.dueDate && cjDateOnly(t.dueDate) < today) lateCount++;
+  });
   var sum = document.getElementById('cj-summary');
   if(sum){
     if(pkgs.length){
       sum.textContent = pkgs.length + ' job' + (pkgs.length===1?'':'s') + ' open · ' +
         openItems + ' thing' + (openItems===1?'':'s') + ' left to do' +
+        (lateCount ? ' · ' + lateCount + ' overdue' : '') +
         (other.length ? ' · ' + other.length + ' other' : '');
     } else {
       sum.textContent = other.length
@@ -3382,15 +3410,13 @@ function renderClientJobs(){
   }
 
   var html = '';
-  if(late.length) html += '<div class="cj-group">⚠ Needs attention <i></i></div>' + late.map(cjCard).join('');
-  if(hot.length)  html += '<div class="cj-group">In progress <i></i></div>'      + hot.map(cjCard).join('');
-  if(rest.length) html += '<div class="cj-group">Not started <i></i></div>'      + rest.map(cjCard).join('');
+  if(pkgs.length) html += '<div class="cj-group">By shoot date <i></i></div>' + pkgs.map(cjCard).join('');
 
   // One-offs, folded away by default so they can't swamp the packages.
   // A search is never folded: if you looked for it, you want to see it.
   var showOther = CJ_SHOW_OTHER || !!CJ_SEARCH;
   if(other.length){
-    var overdueOther = other.filter(function(t){ return t.dueDate && t.dueDate < today; }).length;
+    var overdueOther = other.filter(function(t){ return t.dueDate && cjDateOnly(t.dueDate) < today; }).length;
     html += '<div class="cj-group" style="margin-top:22px;">'+
       '<button class="cj-fold" onclick="cjToggleOther()">'+
         (showOther ? '▾' : '▸')+' Other client work &middot; '+other.length+
@@ -3399,7 +3425,8 @@ function renderClientJobs(){
     if(showOther) html += other.map(cjCard).join('');
   }
 
-  if(CJ_SHOW_DONE && done.length) html += '<div class="cj-group">Handed over <i></i></div>' + done.map(cjCard).join('');
+  if(CJ_SHOW_DONE && done.length) html += '<div class="cj-group">Handed over <i></i></div>' +
+    done.sort(cjByShootDate).map(cjCard).join('');
   else if(done.length) html += '<div class="cj-group" style="margin-top:22px;">'+
     done.length+' handed over <i></i></div>';
   el.innerHTML = html;
@@ -3408,7 +3435,9 @@ function renderClientJobs(){
 function cjCard(t){
   var p = llParse(t.notes);
   var today = todayStr();
-  var overdue = t.dueDate && t.dueDate < today && !cjIsDone(t);
+  var dueOn   = cjDateOnly(t.dueDate);
+  var shotOn  = cjShootDate(t);
+  var overdue = dueOn && dueOn < today && !cjIsDone(t);
   var needsCheck = /CHECK THE PACKAGE/i.test(String(t.notes||''));
   var hasList = p.total > 0;
   var pct = hasList ? Math.round(p.done / p.total * 100) : 0;
@@ -3454,7 +3483,10 @@ function cjCard(t){
     '<button class="cj-add" onclick="cjAddItem(\''+t.id+'\')">+ Add something to do</button>'+
     cjLinks(t)+
     '<div class="cj-foot">'+
-      (t.dueDate ? '<span class="tc-badge" style="background:'+(overdue?'rgba(192,84,74,.1)':'var(--light)')+';color:'+(overdue?'var(--danger)':'var(--muted)')+';">'+(overdue?'⚠ due ':'📅 due ')+t.dueDate+'</span>' : '')+
+      // The list is in shoot-date order, so the shoot date leads the footer
+      (shotOn ? '<span class="tc-badge" style="background:var(--light);color:var(--slate);font-weight:700;">📸 '+
+                escHtml(shotOn)+(shotOn < today ? '' : ' · upcoming')+'</span>' : '')+
+      (dueOn ? '<span class="tc-badge" style="background:'+(overdue?'rgba(192,84,74,.1)':'var(--light)')+';color:'+(overdue?'var(--danger)':'var(--muted)')+';">'+(overdue?'⚠ due ':'📅 due ')+escHtml(dueOn)+'</span>' : '')+
       (t.assignedTo ? '<span class="tc-badge" style="background:var(--light);color:var(--muted);">'+escHtml(t.assignedTo)+'</span>'
                     : '<button class="btn btn-sm btn-outline" onclick="grabTask(\''+t.id+'\')">✋ Assign to me</button>')+
       ((hasList ? allDone : true) && !cjIsDone(t) ? '<button class="btn btn-sm btn-teal" onclick="cjHandOver(\''+t.id+'\')">✓ Mark handed over</button>' : '')+
