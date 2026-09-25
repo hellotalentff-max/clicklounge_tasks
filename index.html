@@ -2585,6 +2585,12 @@ var JOB = {
   // stays there after the shoot — that's when the editing happens.
   BACKFILL_DAYS_BACK: 0,
 
+  // ── The sweep (see installClientJobsSweep) ──
+  SWEEP_MINS:       15,   // how often the safety net runs
+  SWEEP_BACK_DAYS:   3,   // how far behind today it looks
+  SWEEP_AHEAD_DAYS: 90,   // and how far ahead
+  SWEEP_ROWS:      400,   // how many recent bookings it reads each time
+
   // Everything owed on every session, whatever the package
   CLOSING: [
     'Cull and upload the gallery',
@@ -2765,7 +2771,10 @@ var JOBLL = {
     'styleshots':          { edits:0, prep:['Set standard lighting'] },
     'the coat code':       { edits:0, prep:['Prepare the signature fur coat','Set dark editorial lighting','Set up foil styling'] },
     'angelic muse':        { edits:0, prep:['Prepare the angel wings','Set celestial lighting','Set up cloud or foil styling'] },
-    'the double prestige': { edits:2, prep:['Prepare the signature fur coat AND the angel wings','Set up both looks — dark editorial and celestial','Set up foil / cloud styling'], pmini:true, p8x24:true }
+    // Renamed from "The Double Prestige" on 2026-09-25. The old name is kept
+    // in aka so the bookings already taken under it still build correctly.
+    'double the look': { edits:2, aka:['the double prestige','double prestige'],
+      prep:['Prepare the signature fur coat AND the angel wings','Set up both looks — dark editorial and celestial','Set up foil / cloud styling'], pmini:true, p8x24:true }
   },
   KEEPSAKES: {
     'digital':          { edits:0 },
@@ -2788,9 +2797,14 @@ function job_isLookLab_(service) {
 }
 
 function job_llPick_(hay, map) {
-  var low = String(hay || '').toLowerCase(), best = null;
+  var low = String(hay || '').toLowerCase(), best = null, bestLen = 0;
   for (var k in map) {
-    if (map.hasOwnProperty(k) && low.indexOf(k) !== -1 && (!best || k.length > best.length)) best = k;
+    if (!map.hasOwnProperty(k)) continue;
+    var names = [k].concat((map[k] && map[k].aka) || []);
+    for (var i = 0; i < names.length; i++) {
+      var n = String(names[i] || '').toLowerCase();
+      if (n && low.indexOf(n) !== -1 && n.length > bestLen) { best = k; bestLen = n.length; }
+    }
   }
   return best;
 }
