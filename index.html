@@ -2764,22 +2764,31 @@ var JOBLL = {
 
   SESSIONS: {
     'standard': { edits:0, prep:[] },
-    'styled':   { edits:3, prep:['Book HMUA — basic hair & makeup','Prepare the outfit rack for 1 outfit change'] },
+    // Renamed 2026-09-26: Styled → Signature. Old bookings say Styled, so it
+    // stays in aka. NOTE the collision risk: 'signature' also appears inside
+    // the keepsake 'Signature Wall'. job_lookLab_ splits the label on '+' and
+    // matches each part separately, so the session only ever sees part 1.
+    'signature': { edits:3, aka:['styled'],
+      prep:['Book HMUA — basic hair & makeup','Prepare the outfit rack for 1 outfit change'] },
     'prestige': { edits:5, prep:['Book HMUA — hair and glam makeup look','Prepare the outfit rack for 2 outfit changes'], p8x24:true }
   },
   MOODS: {
     'styleshots':          { edits:0, prep:['Set standard lighting'] },
-    'the coat code':       { edits:0, prep:['Prepare the signature fur coat','Set dark editorial lighting','Set up foil styling'] },
-    'angelic muse':        { edits:0, prep:['Prepare the angel wings','Set celestial lighting','Set up cloud or foil styling'] },
+    // Both of these advertise "+2 edited photo" on the Look Lab page, so the
+    // job has to tell the editor to do them. They counted 0 until 2026-09-26,
+    // which means jobs raised before then are short by 2 — the page was
+    // selling edits the checklist never asked anyone to make.
+    'the coat code':       { edits:2, prep:['Prepare the signature fur coat','Set dark editorial lighting','Set up foil styling'] },
+    'angelic muse':        { edits:2, prep:['Prepare the angel wings','Set celestial lighting','Set up cloud or foil styling'] },
     // Renamed from "The Double Prestige" on 2026-09-25. The old name is kept
     // in aka so the bookings already taken under it still build correctly.
-    'double the look': { edits:2, aka:['the double prestige','double prestige'],
+    'twofold': { edits:2, aka:['double the look','the double prestige','double prestige'],
       prep:['Prepare the signature fur coat AND the angel wings','Set up both looks — dark editorial and celestial','Set up foil / cloud styling'], pmini:true, p8x24:true }
   },
   KEEPSAKES: {
     'digital':          { edits:0 },
     'mini keepsake':    { edits:0, pmini:true },
-    'signature wall':   { edits:2, pmini:true, p8x24:true },
+    'prestige wall':    { edits:2, aka:['signature wall'], pmini:true, p8x24:true },
     'prestige acrylic': { edits:3, pmini:true, p8x24:true,
                           frames:['Mount the 8×24in portrait in the Acrylic Frame with Gold Studs'] }
   },
@@ -2815,9 +2824,26 @@ function job_lookLab_(service, note, llParts) {
   var after = label.indexOf(':') !== -1 ? label.slice(label.indexOf(':') + 1) : label;
   var parts = after.split('+');
 
-  var sKey = job_llPick_(parts[0] || '', LL.SESSIONS)  || job_llPick_(after, LL.SESSIONS);
-  var mKey = job_llPick_(parts[1] || '', LL.MOODS)     || job_llPick_(after, LL.MOODS);
-  var kKey = job_llPick_(parts.slice(2).join('+') || '', LL.KEEPSAKES) || job_llPick_(after, LL.KEEPSAKES);
+  // A well-formed label names the three choices in order, separated by "+".
+  // When it does, each kind is matched ONLY against its own segment — the
+  // whole-label fallback is not used.
+  //
+  // That fallback is there for a label that never got split properly, but on
+  // a well-formed one it leaks across segments, and the part names now make
+  // that dangerous: the keepsakes are called "Prestige Wall" and "Prestige
+  // Acrylic", so an unrecognised session would find "prestige" in the
+  // KEEPSAKE segment and silently bill the client a Prestige session's
+  // inclusions — 5 edits and glam makeup — with nothing flagged. A session
+  // nobody recognises has to be reported, not guessed at from another field.
+  var tidy = parts.length >= 3;
+  var sKey = job_llPick_(parts[0] || '', LL.SESSIONS);
+  var mKey = job_llPick_(parts[1] || '', LL.MOODS);
+  var kKey = job_llPick_(parts.slice(2).join('+') || '', LL.KEEPSAKES);
+  if (!tidy) {
+    if (!sKey) sKey = job_llPick_(after, LL.SESSIONS);
+    if (!mKey) mKey = job_llPick_(after, LL.MOODS);
+    if (!kKey) kKey = job_llPick_(after, LL.KEEPSAKES);
+  }
 
   var S = LL.SESSIONS[sKey], M = LL.MOODS[mKey], K = LL.KEEPSAKES[kKey];
 
