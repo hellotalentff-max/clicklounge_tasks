@@ -3408,6 +3408,21 @@ function renderClientJobs(){
   var pkgs  = live.filter(cjHasChecklist);
   var other = live.filter(function(t){ return !cjHasChecklist(t); });
 
+  // A plain client-job entry is auto-raised when a booking is confirmed,
+  // with no awareness of whether a fuller checklist job already exists for
+  // the same client and shoot date (e.g. someone added one by hand via
+  // + Add Job). When both exist it's the same booking twice — the
+  // checklist version already covers it, so drop the bare duplicate here
+  // rather than showing the same client/session with nothing to do under
+  // "Other client work".
+  other = other.filter(function(t){
+    var client = String(t.client||'').trim().toLowerCase();
+    var shot = cjShootDate(t);
+    return !pkgs.some(function(p){
+      return String(p.client||'').trim().toLowerCase() === client && cjShootDate(p) === shot;
+    });
+  });
+
   // One list, in shoot-date order. The urgency still shows — an overdue job
   // keeps its red border, one with an unknown package keeps its orange one
   // and its banner — but it no longer jumps the queue. Reading down the
