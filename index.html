@@ -95,6 +95,12 @@ select.sinput{appearance:auto;}
 .ll-item.ll-on span{text-decoration:line-through;color:var(--muted);}
 .ll-item label{cursor:pointer;flex:1;}
 /* 🎯 Client Jobs */
+.cj-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px;padding:10px 12px;background:var(--light);border-radius:10px;}
+.cj-chip{border:1.5px solid var(--border);background:var(--white);color:var(--muted);border-radius:20px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+.cj-chip:hover{border-color:var(--teal);color:var(--teal);}
+.cj-chip.on{background:var(--teal);border-color:var(--teal);color:#fff;}
+.cj-filters input,.cj-filters select{padding:7px 12px;border:1.5px solid var(--border);border-radius:20px;font-size:12px;font-family:inherit;background:var(--white);color:var(--text);min-width:150px;max-width:100%;}
+.cj-clear{border:none;background:transparent;color:var(--danger);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;display:none;}
 .cj-group{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:18px 0 8px;display:flex;align-items:center;gap:8px;}
 .cj-group:first-child{margin-top:0;}
 .cj-group i{flex:1;height:1px;background:var(--border);font-style:normal;}
@@ -238,6 +244,16 @@ select.sinput{appearance:auto;}
       style="min-width:180px;padding:8px 14px;border:1.5px solid var(--border);border-radius:20px;font-size:12px;">
     <button class="btn btn-sm btn-outline" onclick="cjToggleDone()" id="cj-done-btn">Show handed over</button>
     <button class="btn btn-sm btn-teal" onclick="cjOpenAdd()" id="cj-add-btn">+ New job</button>
+  </div>
+  <div class="cj-filters" id="cj-filters">
+    <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Shoot date</span>
+    <button class="cj-chip on" data-cjd="all"   onclick="cjSetDate('all')">All dates</button>
+    <button class="cj-chip"    data-cjd="today" onclick="cjSetDate('today')">Today</button>
+    <button class="cj-chip"    data-cjd="week"  onclick="cjSetDate('week')">Last 7 days</button>
+    <input type="text" id="cj-name" list="cj-name-list" oninput="cjSetName(this.value)" placeholder="👤 Client name…" autocomplete="off">
+    <datalist id="cj-name-list"></datalist>
+    <select id="cj-pkg" onchange="cjSetPkg(this.value)"><option value="">📦 All packages</option></select>
+    <button class="cj-clear" id="cj-clear" onclick="cjClearFilters()">✕ Clear filters</button>
   </div>
   <p style="margin:0 0 14px;font-size:11.5px;color:var(--muted);">
     One card per confirmed booking, with everything that package owes the client. Tick things off as you finish them.
@@ -3302,6 +3318,77 @@ function cjAddSave(){
 var CJ_SEARCH = '', CJ_SHOW_DONE = false, CJ_SHOW_OTHER = false;
 
 function cjSetSearch(q){ CJ_SEARCH = String(q||'').trim().toLowerCase(); renderClientJobs(); }
+
+// ── Filters: shoot date / client name / package ──────────────────
+var CJ_DATE = 'all', CJ_NAME = '', CJ_PKG = '';
+function cjSetDate(d){ CJ_DATE = d; renderClientJobs(); }
+function cjSetName(v){ CJ_NAME = String(v||'').trim().toLowerCase(); renderClientJobs(); }
+function cjSetPkg(v){ CJ_PKG = v || ''; renderClientJobs(); }
+function cjFiltersOn(){ return CJ_DATE !== 'all' || !!CJ_NAME || !!CJ_PKG; }
+function cjClearFilters(){
+  CJ_DATE = 'all'; CJ_NAME = ''; CJ_PKG = '';
+  var n = document.getElementById('cj-name'); if(n) n.value = '';
+  renderClientJobs();
+}
+
+// The package a job is for, without the date/time tail or a leading emoji,
+// so "Styleshots — 2026-10-04 4:45 PM" and "Styleshots — 2026-10-09 1:00 PM"
+// are the same package. Every Look Lab build counts as "The Look Lab".
+function cjPkgName(t){
+  var p = llParse(t.notes);
+  var s = String(p.pkg || t.title || '');
+  s = s.replace(/\s*[\u2014\u2013-]\s*\d{4}-\d{2}-\d{2}.*$/, '')
+       .replace(/^[^A-Za-z0-9]+/, '').trim();
+  if(/^the look lab/i.test(s)) return 'The Look Lab';
+  return s || 'Other';
+}
+
+// Does this job's shoot date fall in the chosen window?
+//  today  — the shoot is today
+//  week   — the last 7 days, today included (6 days back .. today)
+function cjDateMatches(t){
+  if(CJ_DATE === 'all') return true;
+  var d = cjShootDate(t);
+  if(!d) return false;
+  var today = todayStr();
+  if(CJ_DATE === 'today') return d === today;
+  var from = new Date(today + 'T00:00:00Z');
+  from.setUTCDate(from.getUTCDate() - 6);
+  return d >= from.toISOString().slice(0,10) && d <= today;
+}
+
+// Keep the package list and name suggestions in step with the jobs that exist
+function cjSyncFilterUi(all){
+  var sel = document.getElementById('cj-pkg');
+  if(sel){
+    var names = {};
+    all.forEach(function(t){ names[cjPkgName(t)] = 1; });
+    var list = Object.keys(names).sort(function(a,b){ return a.localeCompare(b); });
+    if(CJ_PKG && !names[CJ_PKG]) list.push(CJ_PKG);
+    var sig = list.join('|');
+    if(sel.getAttribute('data-sig') !== sig){
+      sel.innerHTML = '<option value="">\ud83d\udce6 All packages</option>' +
+        list.map(function(n){ return '<option value="'+escHtml(n)+'">'+escHtml(n)+'</option>'; }).join('');
+      sel.setAttribute('data-sig', sig);
+    }
+    sel.value = CJ_PKG;
+  }
+  var dl = document.getElementById('cj-name-list');
+  if(dl){
+    var clients = {};
+    all.forEach(function(t){ var c = String(t.client||'').trim(); if(c) clients[c] = 1; });
+    var csig = Object.keys(clients).sort().join('|');
+    if(dl.getAttribute('data-sig') !== csig){
+      dl.innerHTML = Object.keys(clients).sort().map(function(c){ return '<option value="'+escHtml(c)+'">'; }).join('');
+      dl.setAttribute('data-sig', csig);
+    }
+  }
+  document.querySelectorAll('#cj-filters .cj-chip').forEach(function(b){
+    b.classList.toggle('on', b.getAttribute('data-cjd') === CJ_DATE);
+  });
+  var clr = document.getElementById('cj-clear');
+  if(clr) clr.style.display = cjFiltersOn() ? '' : 'none';
+}
 function cjToggleDone(){
   CJ_SHOW_DONE = !CJ_SHOW_DONE;
   var b = document.getElementById('cj-done-btn');
@@ -3336,12 +3423,23 @@ function cjIsLegacyRecord(t){
   return !!TASK_TYPES_RETIRED[String(t.type||'')];
 }
 
-function cjJobs(){
+// Every client job, before any filter — what the package list is built from
+function cjAllJobs(){
   return (TASKS||[]).filter(function(t){
     if(!cjIsClientWork(t) || t.archived) return false;
-    if(!CJ_SEARCH) return !cjIsLegacyRecord(t);   // search still reaches them
-    var hay = (String(t.client||'')+' '+String(t.title||'')+' '+String(t.notes||'')).toLowerCase();
-    return hay.indexOf(CJ_SEARCH) > -1;
+    return !CJ_SEARCH ? !cjIsLegacyRecord(t) : true;
+  });
+}
+
+function cjJobs(){
+  return cjAllJobs().filter(function(t){
+    if(CJ_SEARCH){
+      var hay = (String(t.client||'')+' '+String(t.title||'')+' '+String(t.notes||'')).toLowerCase();
+      if(hay.indexOf(CJ_SEARCH) === -1) return false;
+    }
+    if(CJ_NAME && String(t.client||'').toLowerCase().indexOf(CJ_NAME) === -1) return false;
+    if(CJ_PKG && cjPkgName(t) !== CJ_PKG) return false;
+    return cjDateMatches(t);
   });
 }
 
@@ -3396,6 +3494,7 @@ function renderClientJobs(){
   var el = document.getElementById('cj-list');
   if(!el) return;
   var today = todayStr();
+  cjSyncFilterUi(cjAllJobs());
   var jobs = cjJobs();
 
   var live = jobs.filter(function(t){ return !cjIsDone(t); });
@@ -3457,6 +3556,11 @@ function renderClientJobs(){
     badge.style.display = pkgs.length ? '' : 'none';
   }
 
+  if(!live.length && !done.length && cjFiltersOn()){
+    el.innerHTML = '<div class="cj-empty">No jobs match these filters.<br><br>' +
+      '<button class="btn btn-sm btn-outline" onclick="cjClearFilters()">Clear filters</button></div>';
+    return;
+  }
   if(!live.length && !done.length){
     el.innerHTML = '<div class="cj-empty">No client jobs yet.<br><br>' +
       'They appear here automatically when a booking is confirmed, ' +
@@ -3469,7 +3573,7 @@ function renderClientJobs(){
 
   // One-offs, folded away by default so they can't swamp the packages.
   // A search is never folded: if you looked for it, you want to see it.
-  var showOther = CJ_SHOW_OTHER || !!CJ_SEARCH;
+  var showOther = CJ_SHOW_OTHER || !!CJ_SEARCH || cjFiltersOn();
   if(other.length){
     var overdueOther = other.filter(function(t){ return t.dueDate && cjDateOnly(t.dueDate) < today; }).length;
     html += '<div class="cj-group" style="margin-top:22px;">'+
