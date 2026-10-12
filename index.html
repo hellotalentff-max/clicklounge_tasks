@@ -181,6 +181,8 @@ select.sinput{appearance:auto;}
   <button class="btn btn-outline" style="color:var(--cream);border-color:rgba(245,240,232,0.3);" onclick="syncAll()">🔄 Sync</button>
 </div>
 
+<div id="sync-warn" style="display:none;background:#fff1ef;color:#8d3a32;border-bottom:1px solid rgba(192,84,74,.35);padding:7px 16px;font-size:12px;font-weight:600;text-align:center;position:sticky;top:0;z-index:50;"></div>
+
 <!-- App Layout: Sidebar + Main -->
 <div class="app-layout">
 
@@ -667,10 +669,13 @@ function saveClients(){
 async function syncAll(){
   if(!hasUrl()){ notify('Set Apps Script URL in Settings','error'); return; }
   notify('Syncing…','info');
+  var _fetchStart = Date.now();
   try{
+    await flushPushQueue();
     var r = await gasCall('getAll');
     if(r.ok){
-      if(Array.isArray(r.tasks)) { var _del=JSON.parse(localStorage.getItem('cl_tasks_deleted')||'[]'); TASKS = r.tasks.map(function(t){ var d=t.due||t.dueDate||''; if(d){t.due=d;t.dueDate=d;} return t; }).filter(function(t){return _del.indexOf(t.id)===-1;}); saveTasks(); }
+      _syncFails = 0; _lastSyncOk = Date.now(); _renderSyncWarn();
+      if(Array.isArray(r.tasks)) { applyServerTasks(r.tasks, _fetchStart); }
 
       // Build complete client list from ALL sources
       var clientMap = {};
@@ -744,21 +749,222 @@ async function syncAll(){
   }
 }
 
-async function pushTask(task, isNew){
+// ================================================================
+//  SAVING & SYNC ENGINE
+//  ----------------------------------------------------------------
+//  Every change is written to this device first, then put on a save queue
+//  that survives a reload. The queue is retried until the sheet confirms it,
+//  and a visible warning shows while anything is still waiting. Before a
+//  change is sent, the job's latest copy is fetched and ONLY what this
+//  device changed is applied to it (a three-way merge), so two people
+//  ticking different boxes no longer wipe each other out. A refresh from
+//  the sheet never replaces a job that still has a change waiting.
+// ================================================================
+var PUSHQ_KEY = 'cl_tasks_pushq';
+var _pushQ = [];            // [{id, isNew, del, base, tries, ts}]
+var _base  = {};            // id -> the job as the sheet last had it
+var _recentPush = {};       // id -> time of the last confirmed save
+var _flushing = false, _flushTimer = null, _retryTimer = null;
+var _syncFails = 0, _lastSyncOk = 0, _lastPushErr = '';
+
+function _clone(o){ try{ return JSON.parse(JSON.stringify(o)); }catch(e){ return null; } }
+function _loadPushQ(){
+  try{ _pushQ = JSON.parse(localStorage.getItem(PUSHQ_KEY) || '[]') || []; }catch(e){ _pushQ = []; }
+}
+function _savePushQ(){
+  try{ localStorage.setItem(PUSHQ_KEY, JSON.stringify(_pushQ)); }catch(e){}
+  _renderSyncWarn();
+}
+function _inPushQ(id){ for(var i=0;i<_pushQ.length;i++) if(_pushQ[i].id===id && !_pushQ[i].del) return _pushQ[i]; return null; }
+
+function _renderSyncWarn(){
+  var el = document.getElementById('sync-warn');
+  if(!el) return;
+  var n = _pushQ.length, msg = '';
+  if(n){
+    msg = '⚠ ' + n + ' change' + (n===1?'':'s') + ' not saved to the sheet yet — retrying. Keep this page open.' + (_lastPushErr ? ' (' + _lastPushErr + ')' : '');
+  } else if(_syncFails >= 2){
+    var mins = _lastSyncOk ? Math.max(1, Math.round((Date.now() - _lastSyncOk)/60000)) : 0;
+    msg = '⚠ Can’t reach the sheet' + (mins ? ' — showing data from ' + mins + ' min ago' : '') + '. Retrying…';
+  }
+  el.textContent = msg;
+  el.style.display = msg ? '' : 'none';
+}
+
+// Called after every local change. The change is already in TASKS.
+function pushTask(task, isNew){
   _lastSaveTime = Date.now();
   saveTasks();
-  if(hasUrl()){
-    try{
-      if(isNew){
-        await gasCall('saveTask', task);
-      } else {
-        await gasCall('updateTask', task);
-      }
-    }catch(e){
-      console.log('Push failed, will sync later:', e.message);
+  if(!task || !task.id) return Promise.resolve();
+  var q = _inPushQ(task.id);
+  if(q){
+    q.ts = Date.now();                       // keep the ORIGINAL base: local holds all edits since then
+  } else {
+    _pushQ.push({ id: task.id, isNew: !!isNew, del: false, base: isNew ? null : _clone(_base[task.id] || null), tries: 0, ts: Date.now() });
+  }
+  _savePushQ();
+  _scheduleFlush(1200);
+  return Promise.resolve();
+}
+function queueTaskDelete(id){
+  _pushQ = _pushQ.filter(function(e){ return e.id !== id; });   // drop any pending edit of a deleted job
+  _pushQ.push({ id: id, del: true, tries: 0, ts: Date.now() });
+  _savePushQ();
+  _scheduleFlush(300);
+}
+
+function _scheduleFlush(ms){
+  if(_flushTimer) clearTimeout(_flushTimer);
+  _flushTimer = setTimeout(flushPushQueue, ms);
+}
+
+// ---- merge: apply only what THIS device changed onto the sheet's latest copy
+function _itemKey(t){ return String(t||'').replace(/\s+/g,' ').trim().toLowerCase(); }
+function _splitNotes(notes){
+  var items = [], free = [];
+  String(notes||'').split('\n').forEach(function(l){
+    var m = l.match(/^\s*\[([ xX])\]\s?(.*)$/);
+    if(m) items.push({ key: _itemKey(m[2]), text: m[2], done: m[1].toLowerCase()==='x' });
+    else free.push(l);
+  });
+  return { items: items, free: free.join('\n') };
+}
+function _mergeNotes(base, local, server){
+  var b = _splitNotes(base), l = _splitNotes(local);
+  // Free text edited here (detail screen): this device's version wins outright
+  if(b.free !== l.free) return local;
+  var bMap = {}; b.items.forEach(function(x){ bMap[x.key] = x; });
+  var lMap = {}; l.items.forEach(function(x){ lMap[x.key] = x; });
+  var lines = String(server||'').split('\n');
+  function findLine(key){
+    for(var i=0;i<lines.length;i++){
+      var m = lines[i].match(/^\s*\[([ xX])\]\s?(.*)$/);
+      if(m && _itemKey(m[2]) === key) return i;
     }
+    return -1;
+  }
+  // ticks and removals
+  b.items.forEach(function(x){
+    var now = lMap[x.key];
+    var at = findLine(x.key);
+    if(!now){ if(at > -1) lines.splice(at, 1); return; }                 // removed here
+    if(now.done !== x.done && at > -1)                                      // ticked/unticked here
+      lines[at] = lines[at].replace(/^(\s*)\[[ xX]\]/, '$1[' + (now.done ? 'x' : ' ') + ']');
+  });
+  // additions
+  l.items.forEach(function(x){
+    if(bMap[x.key] || findLine(x.key) > -1) return;
+    var last = -1;
+    lines.forEach(function(ln, i){ if(/^\s*\[[ xX]\]/.test(ln)) last = i; });
+    var row = '[' + (x.done ? 'x' : ' ') + '] ' + x.text;
+    if(last === -1) lines.push(row); else lines.splice(last + 1, 0, row);
+  });
+  return lines.join('\n');
+}
+function _mergeTask(base, local, server){
+  var out = _clone(server) || {};
+  Object.keys(local).forEach(function(f){
+    if(f === 'notes') return;
+    if(JSON.stringify(local[f]) !== JSON.stringify(base ? base[f] : undefined)) out[f] = local[f];
+  });
+  out.notes = _mergeNotes(base ? base.notes : '', local.notes, server.notes);
+  out.updatedAt = nowTs();
+  return out;
+}
+
+async function flushPushQueue(){
+  if(_flushing) { _scheduleFlush(1500); return; }
+  if(!_pushQ.length || !hasUrl()) { _renderSyncWarn(); return; }
+  if(navigator.onLine === false){ _armRetry(); return; }
+  _flushing = true;
+  try{
+    var serverTasks = null;
+    var needsFetch = _pushQ.some(function(e){ return !e.del && !e.isNew && e.base; });
+    if(needsFetch){
+      try{
+        var r = await gasCall('getAll');
+        if(r && r.ok && Array.isArray(r.tasks)) serverTasks = r.tasks;
+      }catch(e){}
+    }
+    var pending = _pushQ.slice();
+    for(var k=0;k<pending.length;k++){
+      var e = pending[k];
+      try{
+        if(e.del){
+          var rd = await gasCall('deleteRow', { sheet:'Tasks', id: e.id });
+          if(rd && rd.ok === false) throw new Error(rd.error || 'delete failed');
+          _pushQ = _pushQ.filter(function(x){ return x !== e && !(x.id===e.id && x.del); });
+          continue;
+        }
+        var local = (TASKS||[]).find(function(t){ return t.id === e.id; });
+        if(!local){ _pushQ = _pushQ.filter(function(x){ return x !== e; }); continue; }   // deleted meanwhile
+        var snap = _clone(local), out = snap;
+        if(!e.isNew && e.base){
+          if(!serverTasks && e.tries < 3) throw new Error('could not fetch latest copy');
+          var srv = serverTasks && serverTasks.find(function(t){ return t.id === e.id; });
+          if(srv){ if(srv.due && !srv.dueDate) srv.dueDate = srv.due; out = _mergeTask(e.base, snap, srv); }
+        }
+        var res = await gasCall(e.isNew ? 'saveTask' : 'updateTask', out);
+        if(!res || res.ok === false) throw new Error((res && res.error) || 'save failed');
+        // confirmed by the sheet
+        _base[e.id] = _clone(out);
+        _recentPush[e.id] = Date.now();
+        _pushQ = _pushQ.filter(function(x){ return x !== e; });
+        _lastPushErr = '';
+        var cur = (TASKS||[]).find(function(t){ return t.id === e.id; });
+        if(cur && JSON.stringify(cur) === JSON.stringify(snap) && out !== snap){
+          var idx = TASKS.indexOf(cur); TASKS[idx] = out; saveTasks();
+          if(JSON.stringify(out) !== JSON.stringify(snap) && typeof render === 'function') render();   // pick up what others changed
+        } else if(cur && out !== snap && !_inPushQ(e.id)){
+          // edited again during the save: keep local, but it now builds on what was saved
+          _pushQ.push({ id: e.id, isNew: false, del: false, base: _clone(out), tries: 0, ts: Date.now() });
+        }
+      }catch(err){
+        e.tries = (e.tries || 0) + 1;
+        _lastPushErr = String((err && err.message) || err).slice(0, 80);
+      }
+    }
+  } finally {
+    _flushing = false;
+    _savePushQ();
+    if(_pushQ.length) _armRetry();
   }
 }
+function _armRetry(){
+  if(_retryTimer) clearTimeout(_retryTimer);
+  _retryTimer = setTimeout(flushPushQueue, 8000);
+}
+
+// Fold the sheet's tasks into TASKS without ever replacing a job that has
+// a change waiting (or was just saved), and remember each job's sheet copy.
+function applyServerTasks(serverTasks, fetchStart){
+  var del = []; try{ del = JSON.parse(localStorage.getItem('cl_tasks_deleted')||'[]'); }catch(e){}
+  var localById = {}; (TASKS||[]).forEach(function(t){ localById[t.id] = t; });
+  var seen = {}, out = [];
+  serverTasks.forEach(function(t){
+    if(del.indexOf(t.id) !== -1) return;
+    var d = t.due || t.dueDate || ''; if(d){ t.due = d; t.dueDate = d; }
+    seen[t.id] = 1;
+    var keepLocal = localById[t.id] && (_inPushQ(t.id) || (_recentPush[t.id] && _recentPush[t.id] >= fetchStart));
+    if(keepLocal){ out.push(localById[t.id]); }
+    else { out.push(t); _base[t.id] = _clone(t); }
+  });
+  // jobs created here that the sheet hasn't got yet
+  (TASKS||[]).forEach(function(t){
+    var q = _inPushQ(t.id);
+    if(!seen[t.id] && q && q.isNew) out.push(t);
+  });
+  TASKS = out;
+  saveTasks();
+}
+function taskSig(t){
+  var h = 0, n = String(t.notes||'');
+  for(var i=0;i<n.length;i++){ h = (h*31 + n.charCodeAt(i)) | 0; }
+  return [t.id, t.stage, t.updatedAt, t.assignedTo, t.archived, t.done, t.driveLink, t.editedLink,
+          t.driveLinkSentDate, t.editedSentDate, t.dueDate, t.client, n.length, h].join('~');
+}
+
+_loadPushQ(); _renderSyncWarn();
 
 function switchSection(name){
   ['jobs','inventory','settings'].forEach(function(s){
@@ -2413,6 +2619,7 @@ async function sendDriveLink(taskId){
     });
     if(result.ok){
       t.driveLinkSentDate = todayStr();
+      t.updatedAt = nowTs();
       pushTask(t, false);
       notify('Drive link sent to '+cl.email+' with save reminders!','success');
       closeModal();
@@ -3995,7 +4202,7 @@ function deleteTask(id){
   if(deleted.length > 200) deleted = deleted.slice(-200);
   localStorage.setItem('cl_tasks_deleted', JSON.stringify(deleted));
   saveTasks();
-  if(hasUrl()) gasCall('deleteRow',{sheet:'Tasks',id:id}).catch(function(){});
+  if(hasUrl()) queueTaskDelete(id);
   closeModal();
   render();
   notify('Task deleted','info');
@@ -4077,7 +4284,7 @@ if(hasUrl()) {
   setTimeout(processInventoryQueue, 2000);
 }
 
-// Auto-sync every 30 seconds so all staff see updates
+// Auto-sync every 15 seconds so all staff see updates
 var _syncInterval = null;
 function startAutoSync(){
   if(_syncInterval) clearInterval(_syncInterval);
@@ -4085,26 +4292,26 @@ function startAutoSync(){
     if(hasUrl() && document.visibilityState === 'visible'){
       silentSync();
     }
-  }, 30000);
+  }, 15000);
 }
 
 // Silent sync — no notifications, just refresh data
+var _silentBusy = false;
 async function silentSync(){
-  if(!hasUrl()) return;
-  if(Date.now() - _lastSaveTime < 15000) return; // skip if saved recently
-  var deletedIds = JSON.parse(localStorage.getItem('cl_tasks_deleted')||'[]');
+  if(!hasUrl() || _silentBusy) return;
+  _silentBusy = true;
+  var fetchStart = Date.now();
   try{
+    if(_pushQ.length) flushPushQueue();                 // never leave edits waiting
     var r = await gasCall('getAll');
-    if(r.ok){
+    if(r && r.ok){
+      _syncFails = 0; _lastSyncOk = Date.now(); _renderSyncWarn();
       var changed = false;
       if(Array.isArray(r.tasks)){
-        var newJson = JSON.stringify(r.tasks.map(function(t){return t.id+t.stage+t.updatedAt;}).sort());
-        var oldJson = JSON.stringify(TASKS.map(function(t){return t.id+t.stage+t.updatedAt;}).sort());
-        if(newJson !== oldJson){
-          TASKS = r.tasks.map(function(t){ if(t.due && !t.dueDate) t.dueDate=t.due; return t; }).filter(function(t){return deletedIds.indexOf(t.id)===-1;});
-          saveTasks();
-          changed = true;
-        }
+        var before = (TASKS||[]).map(taskSig).sort().join('|');
+        applyServerTasks(r.tasks, fetchStart);
+        var after = (TASKS||[]).map(taskSig).sort().join('|');
+        changed = before !== after;
       }
       if(Array.isArray(r.clients) || Array.isArray(r.registrations) || Array.isArray(r.transactions) || Array.isArray(r.acknowledgements)){
         var clientMap = {};
@@ -4118,8 +4325,9 @@ async function silentSync(){
       }
       if(changed) render();
       updateLastSync();
-    }
-  }catch(e){}
+    } else { _syncFails++; _renderSyncWarn(); }
+  }catch(e){ _syncFails++; _renderSyncWarn(); }
+  finally { _silentBusy = false; }
 }
 
 startAutoSync();
@@ -4130,6 +4338,12 @@ document.addEventListener('visibilitychange', function(){
     silentSync();
   }
 });
+window.addEventListener('focus',  function(){ if(hasUrl()) silentSync(); });
+window.addEventListener('online', function(){ flushPushQueue(); if(hasUrl()) silentSync(); });
+window.addEventListener('beforeunload', function(e){
+  if(_pushQ.length){ e.preventDefault(); e.returnValue = 'Some changes are not saved to the sheet yet.'; return e.returnValue; }
+});
+if(_pushQ.length) setTimeout(flushPushQueue, 1500);
 </script>
 </body>
 </html>
