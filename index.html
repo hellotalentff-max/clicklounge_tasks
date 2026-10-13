@@ -674,7 +674,7 @@ async function syncAll(){
     await flushPushQueue();
     var r = await gasCall('getAll');
     if(r.ok){
-      _syncFails = 0; _lastSyncOk = Date.now(); _renderSyncWarn();
+      _syncFails = 0; _lastSyncOk = Date.now(); _lastFullSync = Date.now(); _renderSyncWarn();
       if(Array.isArray(r.tasks)) { applyServerTasks(r.tasks, _fetchStart); }
 
       // Build complete client list from ALL sources
@@ -872,6 +872,21 @@ function _mergeTask(base, local, server){
   return out;
 }
 
+// Tasks only. The full getAll is ~1.3 MB and takes ~20 s; a tasks-only call is a
+// fraction of that. If the script doesn't have the getTasks action yet, fall
+// back to getAll so nothing breaks.
+var _lightTasks = true, _lastFullSync = 0;
+async function fetchServerTasks(){
+  if(_lightTasks){
+    var r = await gasCall('getTasks');
+    if(r && r.ok && Array.isArray(r.tasks)) return r.tasks;
+    if(r && /unknown action/i.test(String(r.error||''))) _lightTasks = false;
+  }
+  var r2 = await gasCall('getAll');
+  if(r2 && r2.ok && Array.isArray(r2.tasks)){ _lastFullSync = Date.now(); return r2.tasks; }
+  throw new Error('could not load tasks');
+}
+
 async function flushPushQueue(){
   if(_flushing) { _scheduleFlush(1500); return; }
   if(!_pushQ.length || !hasUrl()) { _renderSyncWarn(); return; }
@@ -881,10 +896,7 @@ async function flushPushQueue(){
     var serverTasks = null;
     var needsFetch = _pushQ.some(function(e){ return !e.del && !e.isNew && e.base; });
     if(needsFetch){
-      try{
-        var r = await gasCall('getAll');
-        if(r && r.ok && Array.isArray(r.tasks)) serverTasks = r.tasks;
-      }catch(e){}
+      try{ serverTasks = await fetchServerTasks(); }catch(e){}
     }
     var pending = _pushQ.slice();
     for(var k=0;k<pending.length;k++){
@@ -4295,25 +4307,32 @@ function startAutoSync(){
   }, 15000);
 }
 
-// Silent sync — no notifications, just refresh data
-var _silentBusy = false;
+// Silent sync — no notifications, just refresh data.
+// Tasks are refreshed every tick with the light call; clients and the rest
+// (the heavy getAll) only every 5 minutes.
+var _silentBusy = false, _lastSilent = 0;
 async function silentSync(){
   if(!hasUrl() || _silentBusy) return;
-  _silentBusy = true;
+  // Without the light call every refresh is the heavy getAll, so go back to 30 s
+  if(!_lightTasks && Date.now() - _lastSilent < 30000) return;
+  _silentBusy = true; _lastSilent = Date.now();
   var fetchStart = Date.now();
   try{
     if(_pushQ.length) flushPushQueue();                 // never leave edits waiting
-    var r = await gasCall('getAll');
-    if(r && r.ok){
+    var full = !_lightTasks || (Date.now() - _lastFullSync) > 300000;
+    var r = null, tasks = null;
+    if(full){
+      r = await gasCall('getAll');
+      if(r && r.ok){ _lastFullSync = Date.now(); tasks = r.tasks; }
+    } else {
+      tasks = await fetchServerTasks();
+    }
+    if(Array.isArray(tasks)){
       _syncFails = 0; _lastSyncOk = Date.now(); _renderSyncWarn();
-      var changed = false;
-      if(Array.isArray(r.tasks)){
-        var before = (TASKS||[]).map(taskSig).sort().join('|');
-        applyServerTasks(r.tasks, fetchStart);
-        var after = (TASKS||[]).map(taskSig).sort().join('|');
-        changed = before !== after;
-      }
-      if(Array.isArray(r.clients) || Array.isArray(r.registrations) || Array.isArray(r.transactions) || Array.isArray(r.acknowledgements)){
+      var before = (TASKS||[]).map(taskSig).sort().join('|');
+      applyServerTasks(tasks, fetchStart);
+      var after = (TASKS||[]).map(taskSig).sort().join('|');
+      if(r && r.ok && (Array.isArray(r.clients) || Array.isArray(r.registrations) || Array.isArray(r.transactions) || Array.isArray(r.acknowledgements))){
         var clientMap = {};
         if(Array.isArray(r.clients)) r.clients.forEach(function(c){ var k=(c.fbName||'').trim().toLowerCase(); if(k) clientMap[k]=c; });
         if(Array.isArray(r.registrations)) r.registrations.forEach(function(reg){ var k=(reg.fbName||'').trim().toLowerCase(); if(k&&!clientMap[k]) clientMap[k]={fbName:reg.fbName,email:reg.email||'',type:reg.arrType||'walkin'}; });
@@ -4323,7 +4342,7 @@ async function silentSync(){
         saveClients();
         updateClientCount();
       }
-      if(changed) render();
+      if(before !== after) render();
       updateLastSync();
     } else { _syncFails++; _renderSyncWarn(); }
   }catch(e){ _syncFails++; _renderSyncWarn(); }
