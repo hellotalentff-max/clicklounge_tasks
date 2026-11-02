@@ -4068,6 +4068,7 @@ function cjHandOver(id){
   t.done = true;
   t.completedAt = nowTs();
   t.updatedAt = nowTs();
+  creditCompleter_(t);
   pushTask(t, false);
   notify('✓ '+(t.client||'Job')+' handed over','success');
   render();
@@ -4115,7 +4116,7 @@ function saveTask(existingId){
       t.driveLink = driveLink; t.editedLink = editedLink;
       t.notes = notes; t.photosForEditing = photosForEditing; t.updatedAt = now;
       // Track completion timestamp
-      if(nowDelivered && !wasDelivered) t.completedAt = now;
+      if(nowDelivered && !wasDelivered){ t.completedAt = now; creditCompleter_(t); }
       else if(!nowDelivered && wasDelivered) t.completedAt = '';
       // Ensure createdAt exists for legacy tasks
       if(!t.createdAt) t.createdAt = now;
@@ -4144,6 +4145,11 @@ function saveTask(existingId){
 // ── One-tap self-assign ──
 function getMyName(){
   return localStorage.getItem('cl_my_name') || '';
+}
+// A job finished with nobody on it is credited to whoever finished it, so TimeCommand's
+// Client Jobs KPI can count it. (The sheet keeps assignedTo; a separate field would be dropped.)
+function creditCompleter_(t){
+  if(t && !t.assignedTo){ var me = getMyName(); if(me) t.assignedTo = me; }
 }
 function setMyName(){
   var names = (TC_STAFF||[]).map(function(s){ return s.name; });
@@ -4180,6 +4186,7 @@ function toggleTaskDone(id, isDone){
     t.stage = 'delivered';
     t.done = true;
     if(!t.completedAt) t.completedAt = now;
+    creditCompleter_(t);
   } else {
     // Move back to "new" or whichever previous stage; default to new
     t.stage = 'new';
@@ -4223,8 +4230,11 @@ function deleteTask(id){
 function moveTaskStage(id, newStage){
   var t = TASKS.find(function(x){return x.id===id;});
   if(!t) return;
+  var was = t.stage;
   t.stage = newStage;
   t.updatedAt = todayStr();
+  if(newStage === 'delivered' && was !== 'delivered'){ if(!t.completedAt) t.completedAt = nowTs(); creditCompleter_(t); }
+  else if(newStage !== 'delivered' && was === 'delivered') t.completedAt = '';
   pushTask(t, false);
   render();
 }
